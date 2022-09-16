@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -58,7 +60,7 @@ type ConfigData struct {
 		PassWord     string `json:"passWord"`
 		DataBaseName string `json:"dataBaseName"`
 	}
-	Threshold int `json:"threshold"`
+	Threshold string `json:"threshold"`
 }
 
 var CurrentAddressTable map[string]string
@@ -68,22 +70,20 @@ var PbftAddressTable map[string]string
 var StatusOfAll []*Status
 var MyPort string
 var Threshold int
-
+var ipBlackList map[int]string
 var config ConfigData
+var Hash [32]byte
+var result bool
 
 func init() {
-	file, err := os.Open("config.json")
-	defer file.Close()
-	if err != nil {
-		log.Fatal(err)
-	}
-	err = json.NewDecoder(file).Decode(&config)
+	temp, err := LoadConfig()
 	if err != nil {
 		fmt.Println(err)
 	}
-	// UserName , PassWord , DataBaseName
-	// OpenConnection(config.DataBase, config.User.UserName, config.User.PassWord, config.User.DataBaseName)
-
+	config = temp
+	num, err := strconv.Atoi(config.Threshold)
+	Threshold = num
+	Hash = MakeHashofConfig(config)
 }
 func main() {
 	Handlers()
@@ -93,29 +93,84 @@ func main() {
 	}
 	defer logFile.Close()
 	log.SetOutput(logFile)
-	log.Println("MSP Server Has Started " + time.Now().String())
+	log.Println("MSP Server Has Started" + time.Now().String())
+	go func() {
+		for {
+			OpenConnection(config.DataBase, config.User.UserName, config.User.PassWord, config.User.DataBaseName)
+			time.Sleep(6 * time.Hour)
+		}
+
+	}()
+	go func() {
+		for {
+			CheckConfig()
+			time.Sleep(3000 * time.Millisecond)
+		}
+	}()
 	log.Fatal(http.ListenAndServe(":"+config.Port, nil))
-
 }
-
+func LoadConfig() (ConfigData, error) {
+	temp := new(ConfigData)
+	file, err := os.Open("config.json")
+	defer file.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(&temp)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return *temp, err
+}
+func CheckConfig() {
+	temp, err := LoadConfig()
+	if err != nil {
+		fmt.Println(err)
+	}
+	tempHash := MakeHashofConfig(temp)
+	if tempHash != Hash {
+		config = temp
+		Hash = tempHash
+		num, err := strconv.Atoi(config.Threshold)
+		if err != nil {
+			log.Println(err)
+		}
+		Threshold = num
+		log.Println("Threshold: ", Threshold)
+		log.Println("Changes Has been spotted in config.json file")
+	}
+}
+func MakeHashofConfig(config ConfigData) [32]byte {
+	data := PrepareData(config)
+	Hash := sha256.Sum256(data)
+	return Hash
+}
+func PrepareData(config ConfigData) []byte {
+	data := bytes.Join([][]byte{
+		[]byte(config.DataBase),
+		[]byte(config.Port),
+		[]byte(config.Threshold),
+		[]byte(config.User.DataBaseName),
+		[]byte(config.User.PassWord),
+		[]byte(config.User.UserName),
+	}, []byte{})
+	return data
+}
 func Handlers() {
 	addr := new(Addr)
-	http.HandleFunc("/TableUpdateAlarm", TableUpdateAlarm)
 	http.HandleFunc("/RegNewNode", addr.RegNewNode)
 	http.HandleFunc("/PingReq", PingReq)
 	http.HandleFunc("/ChangeStrategy", addr.ChangeStrategy)
 	http.HandleFunc("/SendBlackIP", SendBlackIP)
 }
-
 func GetMyIP() string {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer conn.Close()
-
 	localAddr := conn.LocalAddr().(*net.UDPAddr)
-
 	return localAddr.IP.String()
 }
 
@@ -127,32 +182,63 @@ func OpenConnection(DataBase string, UserName string, PassWord string, DataBaseN
 		fmt.Println(err)
 	}
 	defer DB.Close()
+	var K int
+	var V string
+	var temp map[int]string
+	rows, err := DB.Query("SELECT * FROM IPBlackList")
+	if err != nil {
+		log.Println(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		err := rows.Scan(K, V)
+		if err != nil {
+			log.Println(err)
+		}
+		temp[K] = V
+	}
+	if ipBlackList == nil {
+		ipBlackList = temp
+	} else {
+		result = CompareIpBlackList(temp)
+	}
+	TableUpdateAlarm()
 }
 
-func TableUpdateAlarm(w http.ResponseWriter, r *http.Request) {
+func CompareIpBlackList(temp map[int]string) bool {
+	if len(ipBlackList) != len(temp) {
+		log.Println("IP BlackList has been Updated")
+		ipBlackList = temp
+		return true
+	}
+	return false
+
+}
+func TableUpdateAlarm() {
 	//open the connection to the DB(Mysql) and Pull IP BlackList from the DB
-	ipBlackList := []string{}
-	Data, err := json.Marshal(ipBlackList)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	for _, V := range CurrentAddressTable {
-		_, err := http.Post("http://"+V+"/TableUpdateAlarm", "application/json", bytes.NewBuffer(Data))
+	if result {
+		Data, err := json.Marshal(ipBlackList)
 		if err != nil {
 			fmt.Println(err)
+			return
 		}
-	}
-	for _, V := range ReadyAddressTable {
-		_, err := http.Post("http://"+V+"/TableUpdateAlarm", "application/json", bytes.NewBuffer(Data))
-		if err != nil {
-			fmt.Println(err)
+		for _, V := range CurrentAddressTable {
+			_, err := http.Post("http://"+V+"/TableUpdateAlarm", "application/json", bytes.NewBuffer(Data))
+			if err != nil {
+				fmt.Println(err)
+			}
 		}
-	}
-	for _, V := range ZombieAddressTable {
-		_, err := http.Post("http://"+V+"/TableUpdateAlarm", "application/json", bytes.NewBuffer(Data))
-		if err != nil {
-			fmt.Println(err)
+		for _, V := range ReadyAddressTable {
+			_, err := http.Post("http://"+V+"/TableUpdateAlarm", "application/json", bytes.NewBuffer(Data))
+			if err != nil {
+				fmt.Println(err)
+			}
+		}
+		for _, V := range ZombieAddressTable {
+			_, err := http.Post("http://"+V+"/TableUpdateAlarm", "application/json", bytes.NewBuffer(Data))
+			if err != nil {
+				fmt.Println(err)
+			}
 		}
 	}
 }
@@ -165,7 +251,7 @@ func PingReq(w http.ResponseWriter, r *http.Request) {
 		}
 		NodeStatus := new(Status)
 		json.NewDecoder(res.Body).Decode(&NodeStatus)
-		if NodeStatus.MemoryUsage >= config.Threshold {
+		if NodeStatus.MemoryUsage >= Threshold {
 			NodeStatus.Address = NodeAddress
 			NodeStatus.GroupName = "Zombie"
 			log.Println("Current Node To Zombie Node" + NodeStatus.Address)
@@ -300,20 +386,15 @@ func CheckZombie() {
 				fmt.Println(err)
 			}
 		}
+		log.Println("Changed Strategy to NORMAL")
 	}
 }
 
 func SendBlackIP(w http.ResponseWriter, r *http.Request) {
 	Data := new(ReqData)
 	json.NewDecoder(r.Body).Decode(&Data)
-	SemiBlackIP, err := json.Marshal(Data.Ip)
-	if err != nil {
-		fmt.Println(err)
-	}
-	_, err = http.Post("ToDashBoard", "application/json", bytes.NewBuffer(SemiBlackIP))
-	if err != nil {
-		fmt.Println(err)
-	}
+	log.Println("SemiBlackIP", Data.Ip)
+
 }
 
 func NodeSwitching() {

@@ -1,7 +1,7 @@
 {
     "port" : "8888",
 
-    "threshold" : 75,
+    "threshold" : "55",
     
     "dataBase" : "mysql",
 
@@ -9,7 +9,10 @@
         "userName" : "pkb",
         "passWord" : "pkb0322",
         "dataBaseName" : "Cabb"
-    } 
+    },
+    
+    "pBFT" : "192.168.11.11:1800"
+
 
 
 

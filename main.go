@@ -14,7 +14,6 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/kjk/dailyrotate"
 	"github.com/prometheus/procfs"
 )
 
@@ -35,9 +34,10 @@ type Status struct {
 	CpuUsage    int    `json:"cpuUsage"`
 }
 type Addr struct {
-	NewNode string `json:"node"`
-	Type    string `json:"type"`
-	Address string `json:"address"`
+	NewNode  string `json:"node"`
+	Type     string `json:"type"`
+	Address  string `json:"address"`
+	NodeName string `json:"nodeName"`
 }
 type Transaction struct {
 	TxID        [32]byte `json:"TxID"`
@@ -62,6 +62,7 @@ type ConfigData struct {
 		DataBaseName string `json:"dataBaseName"`
 	}
 	Threshold string `json:"threshold"`
+	Revive    string `json:"revive"`
 	PBFT      string `json:"pBFT"`
 }
 
@@ -72,11 +73,12 @@ var PbftAddressTable map[string]string
 var StatusOfAll []*Status
 var MyPort string
 var Threshold int
+var Revive int
 var ipBlackList map[int]string
 var config ConfigData
 var Hash [32]byte
 var result bool
-var logFile2 *dailyrotate.File
+var NodeNameTable map[string]string
 
 func init() {
 	temp, err := LoadConfig()
@@ -85,40 +87,26 @@ func init() {
 	}
 	config = temp
 	num, err := strconv.Atoi(config.Threshold)
+	digit, err := strconv.Atoi(config.Revive)
 	Threshold = num
+	Revive = digit
 	Hash = MakeHashofConfig(config)
 }
-
 func main() {
 	CurrentAddressTable = make(map[string]string)
 	ReadyAddressTable = make(map[string]string)
 	ZombieAddressTable = make(map[string]string)
+	ipBlackList = make(map[int]string)
+	NodeNameTable = make(map[string]string)
 	Handlers()
-	go func() {
-		for {
-			Work()
-		}
-	}()
-	// fmt.Println(GetMyIP())
-	today := time.Now().Format("2006-01-02")
-	fmt.Println(today)
-	var Today string
-	Today = fmt.Sprint(today)
-	logFile, err := os.OpenFile(Today+".txt", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err != nil {
-		log.Println(err)
-	}
-	defer logFile.Close()
-	log.SetOutput(logFile)
-	log.Println("MSP Has Started " + time.Now().String())
+	Work()
+	WriteLog("MSP Has Started " + time.Now().String())
 	// go func() {
 	// 	for {
 	// 		OpenConnection(config.DataBase, config.User.UserName, config.User.PassWord, config.User.DataBaseName)
 	// 		time.Sleep(6 * time.Hour)
 	// 	}
-
 	// }()
-
 	go func() {
 		for {
 			CheckConfig()
@@ -223,7 +211,6 @@ func OpenConnection(DataBase string, UserName string, PassWord string, DataBaseN
 	}
 	TableUpdateAlarm()
 }
-
 func CompareIpBlackList(temp map[int]string) bool {
 	if len(ipBlackList) != len(temp) {
 		WriteLog("IP BlackList has been Updated")
@@ -231,7 +218,6 @@ func CompareIpBlackList(temp map[int]string) bool {
 		return true
 	}
 	return false
-
 }
 func TableUpdateAlarm() {
 	//open the connection to the DB(Mysql) and Pull IP BlackList from the DB
@@ -263,17 +249,17 @@ func TableUpdateAlarm() {
 }
 func PingReq(w http.ResponseWriter, r *http.Request) {
 	for Node, NodeAddress := range CurrentAddressTable {
-		res, err := http.Post("http://"+NodeAddress+"/PingReq", "text/plain", nil)
+		GroupName := "Current"
+		Json_Data, _ := json.Marshal(GroupName)
+		res, err := http.Post("http://"+NodeAddress+"/PingReq", "applicaion/json", bytes.NewBuffer(Json_Data))
 		if err != nil {
-			addr := Addr{Node, "1", NodeAddress}
-			WriteLog("Node's Status right Before Disconnected " + addr.Address + ":" + addr.NewNode + " " + addr.Type)
+			WriteLog("Disconnected " + NodeNameTable[Node] + NodeAddress + " " + "1")
 		}
 		NodeStatus := new(Status)
 		json.NewDecoder(res.Body).Decode(&NodeStatus)
 		if NodeStatus.MemoryUsage >= Threshold {
 			NodeStatus.Address = NodeAddress
 			NodeStatus.GroupName = "Zombie"
-			WriteLog("Current Node To Zombie Node" + NodeStatus.Address)
 			//NodeSwitching
 			for K, V := range ReadyAddressTable {
 				delete(ReadyAddressTable, K)
@@ -291,32 +277,31 @@ func PingReq(w http.ResponseWriter, r *http.Request) {
 		} else {
 			NodeStatus.Address = NodeAddress
 			NodeStatus.GroupName = "Current"
-			log.Println(NodeStatus)
 			WriteLog(NodeStatus.Address + " " + NodeStatus.GroupName)
 		}
 		StatusOfAll = append(StatusOfAll, NodeStatus)
+		json.NewEncoder(w).Encode(NodeStatus.GroupName)
 	}
 	for Node, NodeAddress := range ReadyAddressTable {
-		res, err := http.Post("http://"+NodeAddress+"/PingReq", "text/plain", nil)
+		GroupName := "Ready"
+		Json_Data, _ := json.Marshal(GroupName)
+		res, err := http.Post("http://"+NodeAddress+"/PingReq", "application/json", bytes.NewBuffer(Json_Data))
 		if err != nil {
-			addr := Addr{Node, "1", NodeAddress}
-			WriteLog("Node's Status right Before Disconnected " + addr.Address + ":" + addr.NewNode + " " + addr.Type)
-
+			WriteLog("Disconnected " + NodeNameTable[Node] + NodeAddress + " " + "1")
 		}
 		NodeStatus := new(Status)
 		json.NewDecoder(res.Body).Decode(&NodeStatus)
 		NodeStatus.Address = NodeAddress
 		NodeStatus.GroupName = "Ready"
-		log.Println(NodeStatus)
 		WriteLog(NodeStatus.Address + " " + NodeStatus.GroupName)
 		StatusOfAll = append(StatusOfAll, NodeStatus)
 	}
-
 	for Node, NodeAddress := range ZombieAddressTable {
-		res, err := http.Post("http://"+NodeAddress+"/PingReq", "text/plain", nil)
+		GroupName := "Zombie"
+		Json_Data, _ := json.Marshal(GroupName)
+		res, err := http.Post("http://"+NodeAddress+"/PingReq", "application/json", bytes.NewBuffer(Json_Data))
 		if err != nil {
-			addr := Addr{Node, "2", NodeAddress}
-			WriteLog("Node's Status right Before Disconnected " + addr.Address + ":" + addr.NewNode + " " + addr.Type)
+			WriteLog("Disconnected " + NodeNameTable[Node] + NodeAddress + " " + "2")
 		}
 		NodeStatus := new(Status)
 		json.NewDecoder(res.Body).Decode(&NodeStatus)
@@ -349,24 +334,23 @@ func SendPingRes(StatusOfAll []*Status) {
 	}
 	MyStatus := Status{GetMyIP() + MyPort, "MSP", stat.ResidentMemory(), stat.ResidentMemory()}
 	StatusOfAll = append(StatusOfAll, &MyStatus)
-	log.Println(MyStatus)
 	WriteLog(GetMyIP() + MyPort + "MSP" + fmt.Sprint(stat.ResidentMemory()) + fmt.Sprint(stat.ResidentMemory()))
 }
 func RegNewNode(w http.ResponseWriter, req *http.Request) {
 	addr := new(Addr)
-	fmt.Println("RegNewNode Called")
 	json.NewDecoder(req.Body).Decode(addr)
-	fmt.Printf("Node Name: %s, Node Type %s ,Node IP : %s", addr.NewNode, addr.Type, addr.Address)
-	WriteLog(addr.NewNode + "\t" + addr.Type + "\t" + addr.Address + "\n")
-	ipBlackList := "abcd"
+	WriteLog("NewNode" + ":" + addr.NewNode + "\t" + addr.Type + "\t" + addr.Address + "\n")
 	w.Header().Set("Content-Type", "application/json")
+	ipBlackList := "adcd"
 	json.NewEncoder(w).Encode(ipBlackList)
 	if addr.Type == "1" {
 		if len(CurrentAddressTable) < 4 {
 			CurrentAddressTable[addr.NewNode] = addr.Address + ":" + addr.NewNode
+			NodeNameTable[addr.NewNode] = addr.NodeName
 		} else {
 			WriteLog("CurrentAddressTable is Full")
 			ReadyAddressTable[addr.NewNode] = addr.Address + ":" + addr.NewNode
+			NodeNameTable[addr.NewNode] = addr.NodeName
 		}
 	} else {
 		ZombieAddressTable[addr.NewNode] = addr.Address + ":" + addr.NewNode
@@ -374,20 +358,19 @@ func RegNewNode(w http.ResponseWriter, req *http.Request) {
 	if len(CurrentAddressTable) >= 3 {
 		InitialHosts()
 	}
-}
 
+}
 func InitialHosts() {
 	var Hosts []string
 	for _, V := range CurrentAddressTable {
 		Hosts = append(Hosts, V)
 		if len(Hosts) == 3 {
 			Data, _ := json.Marshal(Hosts)
-			http.Post("localhost:7000/UpdateHost", "application/json", bytes.NewBuffer(Data))
+			http.Post("http://localhost:7000/UpdateHost", "application/json", bytes.NewBuffer(Data))
 			break
 		}
 	}
 }
-
 func (addr *Addr) ChangeStrategy(w http.ResponseWriter, req *http.Request) {
 	Strategy := "ABNORMAL"
 	Data, err := json.Marshal(Strategy)
@@ -414,7 +397,14 @@ func (addr *Addr) ChangeStrategy(w http.ResponseWriter, req *http.Request) {
 	}
 }
 func CheckZombie() {
-	if len(ZombieAddressTable) == 0 {
+	result := 0
+	Now := time.Now()
+	for time.Since(Now).Milliseconds() <= 3000 {
+		if len(ZombieAddressTable) > 0 {
+			result++
+		}
+	}
+	if result == 0 {
 		Strategy := "NORMAL"
 		Data, _ := json.Marshal(Strategy)
 		for _, V := range CurrentAddressTable {
@@ -429,17 +419,13 @@ func CheckZombie() {
 				fmt.Println(err)
 			}
 		}
-		WriteLog("Changed Strategy to NORMAL")
 	}
 }
-
 func SendBlackIP(w http.ResponseWriter, r *http.Request) {
 	Data := new(ReqData)
 	json.NewDecoder(r.Body).Decode(&Data)
-	log.Println("SemiBlackIP", Data.Ip)
-
+	WriteLog("SemiBlackIP " + Data.Ip)
 }
-
 func NodeSwitching() {
 	for Node, NodeAddress := range ZombieAddressTable {
 		res, err := http.Post("http://"+NodeAddress+"/PingReq", "text/plain", nil)
@@ -449,7 +435,7 @@ func NodeSwitching() {
 		NodeStatus := new(Status)
 		Decoder := json.NewDecoder(res.Body)
 		Decoder.Decode(&NodeStatus)
-		if NodeStatus.MemoryUsage <= 20 {
+		if NodeStatus.MemoryUsage <= Revive {
 			delete(ZombieAddressTable, Node)
 			ReadyAddressTable[Node] = NodeAddress
 			// tell zombie to change the type as "1" cuz it has "2" as a type

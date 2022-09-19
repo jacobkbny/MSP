@@ -2,8 +2,12 @@
     "port" : "8888",
 
     "threshold" : "55",
+
+    "revive" :"20",
     
     "dataBase" : "mysql",
+
+    "GateWay" : "192.168.100.1000",
 
     "user" : {
         "userName" : "pkb",

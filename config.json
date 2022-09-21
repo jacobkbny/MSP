@@ -1,20 +1,19 @@
 {
     "port" : "8888",
 
-    "threshold" : "55",
+    "threshold" : "70",
 
-    "revive" :"20",
+    "revive" :"15",
     
     "dataBase" : "mysql",
 
-    "GateWay" : "192.168.100.1000",
+    "gateWay" : "192.168.100.1000",
 
     "user" : {
         "userName" : "pkb",
         "passWord" : "pkb0322",
         "dataBaseName" : "Cabb"
     },
-    
     "pBFT" : "192.168.11.11:1800"
 
 

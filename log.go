@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -31,12 +30,12 @@ func OpenLogFile(pathFormat string, onClose func(string, bool)) error {
 }
 
 func CloseLogFile() error {
-	fmt.Println("LogFile is Closed")
 	return LogFile.Close()
 }
 
 func WriteLog(msg string) error {
 	_, err := LogFile.Write([]byte(msg))
+	CloseLogFile()
 	return err
 }
 
@@ -46,7 +45,7 @@ func Work() {
 	if err != nil {
 		log.Fatalf("os.MkdirAll()(")
 	}
-	pathFormat := filepath.Join(logDir, "2006-01-02.txt")
+	pathFormat := filepath.Join(logDir, "2006-01-02"+"MSP"+".txt")
 	err = OpenLogFile(pathFormat, OnLogClose)
 	if err != nil {
 		log.Fatalf("openLogFile failed with '%s'\n", err)

@@ -27,7 +27,6 @@ type ReqData struct {
 	URL_Path      string `json:"urlPath"`
 	Tx            Transaction
 }
-
 type Status struct {
 	Address     string `json:"address"`
 	GroupName   string `json:"groupName"`
@@ -53,7 +52,6 @@ type Transaction struct {
 	WAddr       []byte   `json:"Address"` // 지갑 주소
 	Sign        []byte   `json:"Sign"`
 }
-
 type ConfigData struct {
 	Port     string `json:"port"`
 	DataBase string `json:"dataBase"`
@@ -100,7 +98,6 @@ func init() {
 	Strategy = "NORMAL"
 }
 func Server() {
-	Boot := time.Now()
 	fmt.Println(GetMyIP())
 	CurrentAddressTable = make(map[string]string)
 	ReadyAddressTable = make(map[string]string)
@@ -112,7 +109,7 @@ func Server() {
 	HostAddressTable = make(map[string]string)
 	Handlers()
 	Work()
-	WriteLog("\n" + "starttime:" + time.Now().String() + "\n")
+	WriteLog("\n" + "starttime:" + time.Now().Format("2006-01-02 15:04:05") + "\n")
 	WriteLog("name:Athena" + "\n")
 	WriteLog("strategy:" + Strategy + "\n")
 	CloseLogFile()
@@ -151,10 +148,17 @@ func Server() {
 	go func() {
 		for {
 			if Strategy != "NORMAL" {
+				CheckLazyBoyHost()
 				CheckZombie()
 				WriteLog("strategy:" + Strategy + "\n")
 				CloseLogFile()
 			}
+		}
+	}()
+	go func() {
+		for {
+			time.Sleep(10 * time.Millisecond)
+			PingReq()
 		}
 	}()
 	log.Fatal(http.ListenAndServe(":"+config.Port, nil))
@@ -215,12 +219,11 @@ func PrepareData(config ConfigData) []byte {
 	return data
 }
 func Handlers() {
-	addr := new(Addr)
 	http.HandleFunc("/RegNewNode", RegNewNode)
-	http.HandleFunc("/PingReq", PingReq)
-	http.HandleFunc("/ChangeStrategy", addr.ChangeStrategy)
+	http.HandleFunc("/ChangeStrategy", ChangeStrategy)
 	// http.HandleFunc("/SendBlackIP", SendBlackIP)
 	http.HandleFunc("/GetLazyBoy", GetLazyBoy)
+	http.HandleFunc("/Rest", Rest)
 }
 func GetMyIP() string {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
@@ -298,7 +301,7 @@ func TableUpdateAlarm() {
 		}
 	}
 }
-func PingReq(w http.ResponseWriter, r *http.Request) {
+func PingReq() {
 	for Node, NodeAddress := range CurrentAddressTable {
 		GroupName := "Current"
 		Json_Data, _ := json.Marshal(GroupName)
@@ -373,12 +376,14 @@ func PingReq(w http.ResponseWriter, r *http.Request) {
 		}
 		SendPingRes(StatusOfAll)
 	}
-	for Node, NodeAddress := range PbftHostAddressTable {
-		_, err := http.Post("http://"+NodeAddress+"/PingReq", "text/plain", nil)
-		if err != nil {
-			WriteLog("pBFTDisconnected " + NodeNameTable[Node] + NodeAddress + "\n")
-			WriteLog(err.Error() + "\n")
-			delete(PbftHostAddressTable, Node)
+	if len(PbftHostAddressTable) > 0 {
+		for Node, NodeAddress := range PbftHostAddressTable {
+			_, err := http.Post("http://"+NodeAddress+"/PingReq", "text/plain", nil)
+			if err != nil {
+				WriteLog("pBFTDisconnected " + NodeNameTable[Node] + NodeAddress + "\n")
+				WriteLog(err.Error() + "\n")
+				delete(PbftHostAddressTable, Node)
+			}
 		}
 	}
 	for Node, NodeAddress := range PbftReadyAddressTable {
@@ -469,7 +474,7 @@ func CheckHost() {
 	}
 	WriteLog("Hosts:" + hosts + "\n")
 }
-func (addr *Addr) ChangeStrategy(w http.ResponseWriter, req *http.Request) {
+func ChangeStrategy(w http.ResponseWriter, req *http.Request) {
 	Strategy = "ABNORMAL"
 	Data, err := json.Marshal(Strategy)
 	if err != nil {
@@ -529,38 +534,57 @@ var ADT int64
 var Start time.Time
 
 func GetLazyBoy(w http.ResponseWriter, r *http.Request) {
-	WriteLog("StartDelay:" + time.Now().String() + "\n")
+	WriteLog("StartDelay:" + time.Now().Format("2006-01-02 15:04:05") + "\n")
 	Start = time.Now()
-	for K, V := range PbftReadyAddressTable {
-		json.NewEncoder(w).Encode(V)
-		PbftHostAddressTable[K] = V
-		break
+	if len(PbftHostAddressTable) == 0 {
+		for K, V := range PbftReadyAddressTable {
+			PbftHostAddressTable[K] = V
+			err := Awake(V)
+			WriteLog("error:" + err.Error() + "\n")
+			CloseLogFile()
+			json.NewEncoder(w).Encode(V)
+			break
+		}
+	} else {
+		for _, V := range PbftHostAddressTable {
+			json.NewEncoder(w).Encode(V)
+		}
 	}
 }
+func Awake(address string) error {
+	_, err := http.Post("http://"+address+"/awake", "text/plain", nil)
+	return err
+}
+
+func Rest(w http.ResponseWriter, r *http.Request) {
+	for Node := range PbftHostAddressTable {
+		for K, V := range PbftReadyAddressTable {
+			PbftHostAddressTable[K] = V
+		}
+		delete(PbftHostAddressTable, Node)
+	}
+}
+
 func FinishDelay(w http.ResponseWriter, r *http.Request) {
 	reqData := new(ReqData)
 	json.NewDecoder(r.Body).Decode(&reqData)
+	DelayResult(*reqData)
 	ADT = time.Since(Start).Milliseconds()
 	WriteLog("ADT:" + fmt.Sprint(ADT) + "\n")
 }
-
-func NodeSwitching() {
-	for Node, NodeAddress := range ZombieAddressTable {
-		res, err := http.Post("http://"+NodeAddress+"/PingReq", "text/plain", nil)
-		if err != nil {
-			WriteLog(err.Error() + "\n")
-		}
-		NodeStatus := new(Status)
-		Decoder := json.NewDecoder(res.Body)
-		Decoder.Decode(&NodeStatus)
-		if NodeStatus.MemoryUsage <= Revive {
-			delete(ZombieAddressTable, Node)
-			ReadyAddressTable[Node] = NodeAddress
-			// tell zombie to change the type as "1" cuz it has "2" as a type
-		}
+func DelayResult(reqData ReqData) {
+	Data, err := json.Marshal(reqData)
+	if err != nil {
+		WriteLog("error:" + err.Error() + "\n")
+		CloseLogFile()
+	}
+	for _, V := range HostAddressTable {
+		_, err = http.Post("http://"+V+"/DelayResult", "application/json", bytes.NewBuffer(Data))
+		WriteLog("error:" + err.Error() + "\n")
+		CloseLogFile()
 	}
 }
-func CheckPbftHost() {
+func CheckLazyBoyHost() {
 	if len(PbftHostAddressTable) > 0 {
 		for _, V := range PbftHostAddressTable {
 			WriteLog("LazyBoyHost:" + V + "\n")

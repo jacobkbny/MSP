@@ -98,6 +98,7 @@ func init() {
 	Strategy = "NORMAL"
 }
 func Server() {
+	Boot = time.Now()
 	fmt.Println(GetMyIP())
 	CurrentAddressTable = make(map[string]string)
 	ReadyAddressTable = make(map[string]string)
@@ -108,11 +109,15 @@ func Server() {
 	PbftReadyAddressTable = make(map[string]string)
 	HostAddressTable = make(map[string]string)
 	Handlers()
-	Work()
-	WriteLog("\n" + "starttime:" + time.Now().Format("2006-01-02 15:04:05") + "\n")
-	WriteLog("name:Athena" + "\n")
-	WriteLog("strategy:" + Strategy + "\n")
-	CloseLogFile()
+	// OpenLogFile()
+	logFile := OpenLogFile("General")
+	// WriteLog("\n" + "starttime:" + time.Now().Format("2006-01-02 15:04:05") + "\n")
+	WriteLog(logFile, "starttime"+","+Boot.Format("2006-01-02 15:04:05"))
+	// WriteLog("name:Athena" + "\n")
+	WriteLog(logFile, "name,Athena")
+	// WriteLog("strategy:" + Strategy + "\n")
+	WriteLog(logFile, "strategy,"+Strategy)
+	logFile.Close()
 	// go func() {
 	// 	for {
 	// 		OpenConnection(config.DataBase, config.User.UserName, config.User.PassWord, config.User.DataBaseName)
@@ -122,7 +127,10 @@ func Server() {
 	go func() {
 		for {
 			time.Sleep(1 * time.Minute)
-			WriteLog("enlapsedTime:" + time.Since(Boot).String() + "\n")
+			// WriteLog("enlapsedTime:" + time.Since(Boot).String() + "\n")
+			logFile := OpenLogFile("General")
+			WriteLog(logFile, "enlapsedTime,"+time.Since(Boot).String())
+			defer logFile.Close()
 		}
 	}()
 	go func() {
@@ -133,7 +141,10 @@ func Server() {
 	}()
 	go func() {
 		for {
-			WriteLog("power:on" + "\n")
+			// WriteLog("power:on" + "\n")
+			logFile := OpenLogFile("General")
+			WriteLog(logFile, "power,on")
+			defer logFile.Close()
 			time.Sleep(10000 * time.Millisecond)
 		}
 	}()
@@ -150,8 +161,9 @@ func Server() {
 			if Strategy != "NORMAL" {
 				CheckLazyBoyHost()
 				CheckZombie()
-				WriteLog("strategy:" + Strategy + "\n")
-				CloseLogFile()
+				// WriteLog("strategy:" + Strategy + "\n")
+				logFile := OpenLogFile("General")
+				WriteLog(logFile, "strategy,"+Strategy)
 			}
 		}
 	}()
@@ -187,16 +199,24 @@ func CheckConfig() {
 		config = temp
 		Hash = tempHash
 		num, err := strconv.Atoi(config.Threshold)
+		if err != nil {
+			// WriteLog("error: " + err.Error() + "\n")
+			logFile := OpenLogFile("Error")
+			WriteLog(logFile, "error,"+err.Error())
+			logFile.Close()
+		}
 		digit, err := strconv.Atoi(config.Revive)
 		if err != nil {
-			log.Println(err)
+			logFile := OpenLogFile("Error")
+			WriteLog(logFile, "error,"+err.Error())
+			logFile.Close()
 		}
 		Threshold = num
 		Revive = digit
-		WriteLog("Threshold:" + fmt.Sprint(Threshold) + "\n")
-		WriteLog("Revive:" + fmt.Sprint(Revive) + "\n")
-		CloseLogFile()
-		WriteLog("Changes Has been spotted in config.json file" + "\n")
+		// WriteLog("Threshold:" + fmt.Sprint(Threshold) + "\n")
+		logFile := OpenLogFile("Changes")
+		WriteLog(logFile, "Threshold,"+fmt.Sprint(Threshold)+",Revive,"+fmt.Sprint(Revive))
+		defer logFile.Close()
 	}
 }
 func MakeHashofConfig(config ConfigData) [32]byte {
@@ -248,13 +268,17 @@ func OpenConnection(DataBase string, UserName string, PassWord string, DataBaseN
 	var temp map[int]string
 	rows, err := DB.Query("SELECT * FROM IPBlackList")
 	if err != nil {
-		WriteLog(err.Error() + "\n")
+		logFile := OpenLogFile("Error")
+		WriteLog(logFile, "error,"+err.Error())
+		logFile.Close()
 	}
 	defer rows.Close()
 	for rows.Next() {
 		err := rows.Scan(K, V)
 		if err != nil {
-			WriteLog(err.Error() + "\n")
+			logFile := OpenLogFile("Error")
+			WriteLog(logFile, "error,"+err.Error())
+			logFile.Close()
 		}
 		temp[K] = V
 	}
@@ -267,8 +291,7 @@ func OpenConnection(DataBase string, UserName string, PassWord string, DataBaseN
 }
 func CompareIpBlackList(temp map[int]string) bool {
 	if len(ipBlackList) != len(temp) {
-		WriteLog("IP BlackList has been Updated" + "\n")
-		CloseLogFile()
+		// WriteLog("IP BlackList has been Updated" + "\n")
 		ipBlackList = temp
 	}
 	return true
@@ -278,25 +301,32 @@ func TableUpdateAlarm() {
 	if result {
 		Data, err := json.Marshal(ipBlackList)
 		if err != nil {
-			WriteLog(err.Error() + "\n")
-			return
+			logFile := OpenLogFile("Error")
+			WriteLog(logFile, "error,"+err.Error())
+			logFile.Close()
 		}
 		for _, V := range CurrentAddressTable {
 			_, err := http.Post("http://"+V+"/TableUpdateAlarm", "application/json", bytes.NewBuffer(Data))
 			if err != nil {
-				WriteLog(err.Error() + "\n")
+				logFile := OpenLogFile("Error")
+				WriteLog(logFile, "error,"+err.Error())
+				logFile.Close()
 			}
 		}
 		for _, V := range ReadyAddressTable {
 			_, err := http.Post("http://"+V+"/TableUpdateAlarm", "application/json", bytes.NewBuffer(Data))
 			if err != nil {
-				WriteLog(err.Error() + "\n")
+				logFile := OpenLogFile("Error")
+				WriteLog(logFile, "error,"+err.Error())
+				logFile.Close()
 			}
 		}
 		for _, V := range ZombieAddressTable {
 			_, err := http.Post("http://"+V+"/TableUpdateAlarm", "application/json", bytes.NewBuffer(Data))
 			if err != nil {
-				WriteLog(err.Error() + "\n")
+				logFile := OpenLogFile("Error")
+				WriteLog(logFile, "error,"+err.Error())
+				logFile.Close()
 			}
 		}
 	}
@@ -307,81 +337,101 @@ func PingReq() {
 		Json_Data, _ := json.Marshal(GroupName)
 		res, err := http.Post("http://"+NodeAddress+"/PingReq", "applicaion/json", bytes.NewBuffer(Json_Data))
 		if err != nil {
-			WriteLog("Disconnected:" + NodeNameTable[Node] + NodeAddress + " " + "1" + "\n")
-		}
-		NodeStatus := new(Status)
-		json.NewDecoder(res.Body).Decode(&NodeStatus)
-		if NodeStatus.MemoryUsage >= Threshold {
-			NodeStatus.Address = NodeAddress
-			NodeStatus.GroupName = "Zombie"
-			//NodeSwitching
-			for K, V := range ReadyAddressTable {
-				delete(ReadyAddressTable, K)
-				CurrentAddressTable[K] = V
-				HostAddressTable[K] = V
-				NewHost, err := json.Marshal(CurrentAddressTable[K])
-				if err != nil {
-					WriteLog(err.Error() + "\n")
+			delete(CurrentAddressTable, Node)
+			if len(ReadyAddressTable) > 0 {
+				for K, V := range ReadyAddressTable {
+					CurrentAddressTable[K] = V
+					delete(ReadyAddressTable, K)
+					break
 				}
-				//UpdateHost
-				_, err = http.Post("http://localhost:7000/UpdateHost", "application/json", bytes.NewBuffer(NewHost))
-				WriteLog(err.Error() + "\n")
-				CloseLogFile()
-				delete(CurrentAddressTable, Node)
-				delete(HostAddressTable, Node)
-				ZombieAddressTable[Node] = NodeAddress
-				break
 			}
+			logFile := OpenLogFile("Error")
+			WriteLog(logFile, "error,"+err.Error())
+			WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"1")
+			defer logFile.Close()
+			// WriteLog("Disconnected: " + NodeNameTable[Node] + NodeAddress + " " + "1" + "\n")
+			// WriteLog("error: " + err.Error() + "\n")
+			// CloseLogFile()
 		} else {
-			NodeStatus.Address = NodeAddress
-			NodeStatus.GroupName = "Current"
+			NodeStatus := new(Status)
+			json.NewDecoder(res.Body).Decode(&NodeStatus)
+			if NodeStatus.MemoryUsage >= Threshold {
+				NodeStatus.Address = NodeAddress
+				NodeStatus.GroupName = "Zombie"
+				//NodeSwitching
+				for K, V := range ReadyAddressTable {
+					delete(ReadyAddressTable, K)
+					CurrentAddressTable[K] = V
+					HostAddressTable[K] = V
+					NewHost, err := json.Marshal(CurrentAddressTable[K])
+					if err != nil {
+						logFile := OpenLogFile("Error")
+						WriteLog(logFile, "error,"+err.Error())
+						defer logFile.Close()
+					}
+					//UpdateHost
+					_, err = http.Post("http://localhost:7000/UpdateHost", "application/json", bytes.NewBuffer(NewHost))
+					logFile := OpenLogFile("Error")
+					WriteLog(logFile, "error,"+err.Error())
+					defer logFile.Close()
+					delete(CurrentAddressTable, Node)
+					delete(HostAddressTable, Node)
+					ZombieAddressTable[Node] = NodeAddress
+					break
+				}
+			} else {
+				NodeStatus.Address = NodeAddress
+				NodeStatus.GroupName = "Current"
+			}
 		}
-		StatusOfAll = append(StatusOfAll, NodeStatus)
 	}
-	for Node, NodeAddress := range ReadyAddressTable {
+	for _, NodeAddress := range ReadyAddressTable {
 		GroupName := "Ready"
 		Json_Data, _ := json.Marshal(GroupName)
 		res, err := http.Post("http://"+NodeAddress+"/PingReq", "application/json", bytes.NewBuffer(Json_Data))
 		if err != nil {
-			WriteLog("Disconnected " + NodeNameTable[Node] + NodeAddress + " " + "1" + "\n")
-			WriteLog(err.Error() + "\n")
-			CloseLogFile()
+			logFile := OpenLogFile("Error")
+			WriteLog(logFile, "error,"+err.Error())
+			WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"1")
+			defer logFile.Close()
+		} else {
+			NodeStatus := new(Status)
+			json.NewDecoder(res.Body).Decode(&NodeStatus)
+			NodeStatus.Address = NodeAddress
+			NodeStatus.GroupName = "Ready"
 		}
-		NodeStatus := new(Status)
-		json.NewDecoder(res.Body).Decode(&NodeStatus)
-		NodeStatus.Address = NodeAddress
-		NodeStatus.GroupName = "Ready"
-		StatusOfAll = append(StatusOfAll, NodeStatus)
 	}
 	for Node, NodeAddress := range ZombieAddressTable {
 		GroupName := "Zombie"
 		Json_Data, _ := json.Marshal(GroupName)
 		res, err := http.Post("http://"+NodeAddress+"/PingReq", "application/json", bytes.NewBuffer(Json_Data))
 		if err != nil {
-			WriteLog("Disconnected " + NodeNameTable[Node] + NodeAddress + " " + "2" + "\n")
-			WriteLog(err.Error() + "\n")
-		}
-		NodeStatus := new(Status)
-		json.NewDecoder(res.Body).Decode(&NodeStatus)
-		if NodeStatus.MemoryUsage <= 20 {
-			ReadyAddressTable[Node] = NodeAddress
-			delete(ZombieAddressTable, Node)
-			NodeStatus.Address = NodeAddress
-			NodeStatus.GroupName = "Ready"
-			StatusOfAll = append(StatusOfAll, NodeStatus)
+			logFile := OpenLogFile("Error")
+			WriteLog(logFile, "error,"+err.Error())
+			WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"2")
+			defer logFile.Close()
 		} else {
-			NodeStatus.Address = NodeAddress
-			NodeStatus.GroupName = "Zombie"
-			StatusOfAll = append(StatusOfAll, NodeStatus)
+			NodeStatus := new(Status)
+			json.NewDecoder(res.Body).Decode(&NodeStatus)
+			if NodeStatus.MemoryUsage <= 20 {
+				ReadyAddressTable[Node] = NodeAddress
+				delete(ZombieAddressTable, Node)
+				NodeStatus.Address = NodeAddress
+				NodeStatus.GroupName = "Ready"
+			} else {
+				NodeStatus.Address = NodeAddress
+				NodeStatus.GroupName = "Zombie"
+			}
 		}
-		SendPingRes(StatusOfAll)
 	}
 	if len(PbftHostAddressTable) > 0 {
 		for Node, NodeAddress := range PbftHostAddressTable {
 			_, err := http.Post("http://"+NodeAddress+"/PingReq", "text/plain", nil)
 			if err != nil {
-				WriteLog("pBFTDisconnected " + NodeNameTable[Node] + NodeAddress + "\n")
-				WriteLog(err.Error() + "\n")
+				logFile := OpenLogFile("Error")
+				WriteLog(logFile, "error,"+err.Error())
+				WriteLog(logFile, "pBFTDisconnected,"+NodeAddress+","+"type,"+"3")
+				defer logFile.Close()
 				delete(PbftHostAddressTable, Node)
 			}
 		}
@@ -389,8 +439,10 @@ func PingReq() {
 	for Node, NodeAddress := range PbftReadyAddressTable {
 		_, err := http.Post("http://"+NodeAddress+"/PingReq", "text/plain", nil)
 		if err != nil {
-			WriteLog("pBFTDisconnected " + NodeNameTable[Node] + NodeAddress + "\n")
-			WriteLog(err.Error() + "\n")
+			logFile := OpenLogFile("Error")
+			WriteLog(logFile, "error,"+err.Error())
+			WriteLog(logFile, "pBFTDisconnected,"+NodeAddress+","+"type,"+"3")
+			defer logFile.Close()
 			delete(PbftReadyAddressTable, Node)
 		}
 	}
@@ -399,20 +451,24 @@ func SendPingRes(StatusOfAll []*Status) {
 	pid := os.Getpid()
 	p, err := procfs.NewProc(pid)
 	if err != nil {
-		fmt.Println(err)
+		logFile := OpenLogFile("Error")
+		WriteLog(logFile, "error,"+err.Error())
+		defer logFile.Close()
 	}
 	stat, err := p.Stat()
 	if err != nil {
-		fmt.Println(err)
+		logFile := OpenLogFile("Error")
+		WriteLog(logFile, "error,"+err.Error())
+		defer logFile.Close()
 	}
 	MyStatus := Status{GetMyIP() + MyPort, "MSP", stat.ResidentMemory(), stat.ResidentMemory()}
 	StatusOfAll = append(StatusOfAll, &MyStatus)
-	WriteLog(GetMyIP() + MyPort + "MSP" + fmt.Sprint(stat.ResidentMemory()) + fmt.Sprint(stat.ResidentMemory()))
 }
 func RegNewNode(w http.ResponseWriter, req *http.Request) {
 	addr := new(Addr)
 	json.NewDecoder(req.Body).Decode(addr)
-	WriteLog("NewNode" + ":" + addr.NodeName + "\t" + addr.Type + "\t" + addr.Address + ":" + addr.NewNode + "\n")
+	logFile := OpenLogFile("NewNode")
+	WriteLog(logFile, "nodeName,"+addr.NodeName+",type,"+addr.Type+",address,"+addr.Address+":"+addr.NewNode)
 	w.Header().Set("Content-Type", "application/json")
 	ipBlackList := "abcd"
 	json.NewEncoder(w).Encode(ipBlackList)
@@ -444,7 +500,9 @@ func RegNewNode(w http.ResponseWriter, req *http.Request) {
 					break
 				}
 			}
-			WriteLog("Hosts:" + Hosts[0] + Hosts[1] + Hosts[2])
+			logFile := OpenLogFile("Hosts")
+			WriteLog(logFile, "address,"+Hosts[0]+","+"address,"+Hosts[1]+","+"address,"+Hosts[2])
+			defer logFile.Close()
 		}
 		once.Do(FirstHosts)
 	}
@@ -468,34 +526,40 @@ func CheckHost() {
 	for _, V := range HostAddressTable {
 		temp = append(temp, V)
 	}
-	var hosts string
-	for i := 0; i < len(temp); i++ {
-		hosts = temp[i] + ","
-	}
-	WriteLog("Hosts:" + hosts + "\n")
+	logFile := OpenLogFile("Hosts")
+	WriteLog(logFile, "address,"+temp[0]+","+"address,"+temp[1]+","+"address,"+temp[2])
+	defer logFile.Close()
 }
 func ChangeStrategy(w http.ResponseWriter, req *http.Request) {
 	Strategy = "ABNORMAL"
 	Data, err := json.Marshal(Strategy)
 	if err != nil {
-		fmt.Println(err)
+		logFile := OpenLogFile("Error")
+		WriteLog(logFile, "error,"+err.Error())
+		defer logFile.Close()
 	}
 	for _, V := range CurrentAddressTable {
 		_, err = http.Post("http://"+V+"/ChangeStrategy", "application/json", bytes.NewBuffer(Data))
 		if err != nil {
-			fmt.Println(err)
+			logFile := OpenLogFile("Error")
+			WriteLog(logFile, "error,"+err.Error())
+			defer logFile.Close()
 		}
 	}
 	for _, V := range ReadyAddressTable {
 		_, err = http.Post("http://"+V+"/ChangeStrategy", "application/json", bytes.NewBuffer(Data))
 		if err != nil {
-			fmt.Println(err)
+			logFile := OpenLogFile("Error")
+			WriteLog(logFile, "error,"+err.Error())
+			defer logFile.Close()
 		}
 	}
 	for _, V := range ZombieAddressTable {
 		_, err = http.Post("http://"+V+"/ChangeStrategy", "application/json", bytes.NewBuffer(Data))
 		if err != nil {
-			fmt.Println(err)
+			logFile := OpenLogFile("Error")
+			WriteLog(logFile, "error,"+err.Error())
+			defer logFile.Close()
 		}
 	}
 }
@@ -509,19 +573,24 @@ func CheckZombie() {
 	}
 	if result == 0 {
 		Strategy = "NORMAL"
-		WriteLog("Strategy" + Strategy + "\n")
-		CloseLogFile()
+		logFile := OpenLogFile("General")
+		WriteLog(logFile, "strategy,"+Strategy)
+		defer logFile.Close()
 		Data, _ := json.Marshal(Strategy)
 		for _, V := range CurrentAddressTable {
 			_, err := http.Post("http://"+V+"/ChangeStrategy", "application/json", bytes.NewBuffer(Data))
 			if err != nil {
-				fmt.Println(err)
+				logFile := OpenLogFile("Error")
+				WriteLog(logFile, "error,"+err.Error())
+				defer logFile.Close()
 			}
 		}
 		for _, V := range ReadyAddressTable {
 			_, err := http.Post("http://"+V+"/ChangeStrategy", "application/json", bytes.NewBuffer(Data))
 			if err != nil {
-				fmt.Println(err)
+				logFile := OpenLogFile("Error")
+				WriteLog(logFile, "error,"+err.Error())
+				defer logFile.Close()
 			}
 		}
 	}
@@ -534,14 +603,17 @@ var ADT int64
 var Start time.Time
 
 func GetLazyBoy(w http.ResponseWriter, r *http.Request) {
-	WriteLog("StartDelay:" + time.Now().Format("2006-01-02 15:04:05") + "\n")
+	logFile := OpenLogFile("Performance")
+	WriteLog(logFile, "startDelay,"+time.Now().Format("2006-01-02 15:04:05"))
+	defer logFile.Close()
 	Start = time.Now()
 	if len(PbftHostAddressTable) == 0 {
 		for K, V := range PbftReadyAddressTable {
 			PbftHostAddressTable[K] = V
 			err := Awake(V)
-			WriteLog("error:" + err.Error() + "\n")
-			CloseLogFile()
+			logFile := OpenLogFile("Error")
+			WriteLog(logFile, "error,"+err.Error())
+			defer logFile.Close()
 			json.NewEncoder(w).Encode(V)
 			break
 		}
@@ -555,39 +627,43 @@ func Awake(address string) error {
 	_, err := http.Post("http://"+address+"/awake", "text/plain", nil)
 	return err
 }
+func FinishDelay(w http.ResponseWriter, r *http.Request) {
+	reqData := new(ReqData)
+	json.NewDecoder(r.Body).Decode(&reqData)
+	DelayResult(*reqData)
+	ADT = time.Since(Start).Milliseconds()
+	logFile := OpenLogFile("Performance")
+	WriteLog(logFile, "ADT,"+fmt.Sprint(ADT))
 
+}
+func DelayResult(reqData ReqData) {
+	Data, err := json.Marshal(reqData)
+	if err != nil {
+		logFile := OpenLogFile("Error")
+		WriteLog(logFile, "error,"+err.Error())
+		defer logFile.Close()
+	}
+	for _, V := range HostAddressTable {
+		_, err = http.Post("http://"+V+"/DelayResult", "application/json", bytes.NewBuffer(Data))
+		logFile := OpenLogFile("Error")
+		WriteLog(logFile, "error,"+err.Error())
+		defer logFile.Close()
+	}
+}
+func CheckLazyBoyHost() {
+	if len(PbftHostAddressTable) > 0 {
+		for _, V := range PbftHostAddressTable {
+			logFile := OpenLogFile("Hosts")
+			WriteLog(logFile, "lazyBoyHost,"+V)
+			defer logFile.Close()
+		}
+	}
+}
 func Rest(w http.ResponseWriter, r *http.Request) {
 	for Node := range PbftHostAddressTable {
 		for K, V := range PbftReadyAddressTable {
 			PbftHostAddressTable[K] = V
 		}
 		delete(PbftHostAddressTable, Node)
-	}
-}
-
-func FinishDelay(w http.ResponseWriter, r *http.Request) {
-	reqData := new(ReqData)
-	json.NewDecoder(r.Body).Decode(&reqData)
-	DelayResult(*reqData)
-	ADT = time.Since(Start).Milliseconds()
-	WriteLog("ADT:" + fmt.Sprint(ADT) + "\n")
-}
-func DelayResult(reqData ReqData) {
-	Data, err := json.Marshal(reqData)
-	if err != nil {
-		WriteLog("error:" + err.Error() + "\n")
-		CloseLogFile()
-	}
-	for _, V := range HostAddressTable {
-		_, err = http.Post("http://"+V+"/DelayResult", "application/json", bytes.NewBuffer(Data))
-		WriteLog("error:" + err.Error() + "\n")
-		CloseLogFile()
-	}
-}
-func CheckLazyBoyHost() {
-	if len(PbftHostAddressTable) > 0 {
-		for _, V := range PbftHostAddressTable {
-			WriteLog("LazyBoyHost:" + V + "\n")
-		}
 	}
 }

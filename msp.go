@@ -351,11 +351,11 @@ func TableUpdateAlarm() {
 }
 func PingReq() {
 	for Node, NodeAddress := range CurrentAddressTable {
-
 		var Data []byte
-
-		json.NewEncoder(Client[NodeAddress]).Encode("Current")
-		_, err := Client[NodeAddress].Read(Data)
+		temp := strings.Split(NodeAddress, ":")
+		port, err := strconv.Atoi(temp[1])
+		json.NewEncoder(Client[temp[0]+":"+fmt.Sprint(port+100)]).Encode("Current")
+		_, err = Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
 		Memory := string(Data)
 		if err != nil {
 			delete(CurrentAddressTable, Node)
@@ -407,10 +407,11 @@ func PingReq() {
 		}
 	}
 	for Node, NodeAddress := range ReadyAddressTable {
-		json.NewEncoder(Client[NodeAddress]).Encode("Ready")
+		temp := strings.Split(NodeAddress, ":")
+		port, err := strconv.Atoi(temp[1])
+		json.NewEncoder(Client[temp[0]+":"+fmt.Sprint(port+100)]).Encode("Ready")
 		var Data []byte
-
-		_, err := Client[NodeAddress].Read(Data)
+		_, err = Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
 		if err != nil {
 			logFile := OpenLogFile("Disconnection")
 			WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"1")
@@ -419,9 +420,11 @@ func PingReq() {
 		}
 	}
 	for Node, NodeAddress := range ZombieAddressTable {
-		json.NewEncoder(Client[NodeAddress]).Encode("Zombie")
+		temp := strings.Split(NodeAddress, ":")
+		port, err := strconv.Atoi(temp[1])
+		json.NewEncoder(Client[temp[0]+":"+fmt.Sprint(port+100)]).Encode("Zombie")
 		var Data []byte
-		_, err := Client[NodeAddress].Read(Data)
+		_, err = Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
 		Memory := string(Data)
 		if err != nil {
 			logFile := OpenLogFile("Disconnection")

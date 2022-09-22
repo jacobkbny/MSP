@@ -107,6 +107,7 @@ func Server() {
 	ZombieAddressTable = make(map[string]string)
 	ipBlackList = make(map[int]string)
 	NodeNameTable = make(map[string]string)
+	Client = make(map[string]net.Conn)
 	// PbftHostAddressTable = make(map[string]string)
 	// PbftReadyAddressTable = make(map[string]string)
 	Handlers()
@@ -350,11 +351,11 @@ func TableUpdateAlarm() {
 }
 func PingReq() {
 	for Node, NodeAddress := range CurrentAddressTable {
-		GroupName := "Current"
-		json_Data, err := json.Marshal(GroupName)
+
 		var Data []byte
-		_, err = Client[NodeAddress].Write(json_Data)
-		_, err = Client[NodeAddress].Read(Data)
+
+		json.NewEncoder(Client[NodeAddress]).Encode("Current")
+		_, err := Client[NodeAddress].Read(Data)
 		Memory := string(Data)
 		if err != nil {
 			delete(CurrentAddressTable, Node)
@@ -406,11 +407,10 @@ func PingReq() {
 		}
 	}
 	for Node, NodeAddress := range ReadyAddressTable {
-		GroupName := "Ready"
-		json_Data, err := json.Marshal(GroupName)
+		json.NewEncoder(Client[NodeAddress]).Encode("Ready")
 		var Data []byte
-		_, err = Client[NodeAddress].Write(json_Data)
-		_, err = Client[NodeAddress].Read(Data)
+
+		_, err := Client[NodeAddress].Read(Data)
 		if err != nil {
 			logFile := OpenLogFile("Disconnection")
 			WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"1")
@@ -419,20 +419,15 @@ func PingReq() {
 		}
 	}
 	for Node, NodeAddress := range ZombieAddressTable {
-		GroupName := "Zombie"
-		Json_Data, _ := json.Marshal(GroupName)
-		Client[NodeAddress].Write(Json_Data)
+		json.NewEncoder(Client[NodeAddress]).Encode("Zombie")
 		var Data []byte
-		Client[NodeAddress].Read(Data)
+		_, err := Client[NodeAddress].Read(Data)
 		Memory := string(Data)
-		res, err := http.Post("http://"+NodeAddress+"/PingReq", "application/json", bytes.NewBuffer(Json_Data))
 		if err != nil {
 			logFile := OpenLogFile("Disconnection")
 			WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"2")
 			defer logFile.Close()
 		} else {
-			NodeStatus := new(Status)
-			json.NewDecoder(res.Body).Decode(&NodeStatus)
 			MemoryUsage, err := strconv.Atoi(Memory)
 			if err != nil {
 				logFile := OpenLogFile("Error")
@@ -442,11 +437,6 @@ func PingReq() {
 			if MemoryUsage <= 20 {
 				ReadyAddressTable[Node] = NodeAddress
 				delete(ZombieAddressTable, Node)
-				NodeStatus.Address = NodeAddress
-				NodeStatus.GroupName = "Ready"
-			} else {
-				NodeStatus.Address = NodeAddress
-				NodeStatus.GroupName = "Zombie"
 			}
 		}
 	}

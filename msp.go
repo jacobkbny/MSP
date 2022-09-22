@@ -122,15 +122,17 @@ func Server() {
 	// }()
 	go func() {
 		for {
-			time.Sleep(10 * time.Second)
+			time.Sleep(100 * time.Second)
 			Total := len(CurrentAddressTable) + len(ReadyAddressTable) + len(ZombieAddressTable)
-			temp := fmt.Sprint((len(CurrentAddressTable) / Total) * 100)
-			PPS := strings.Split(temp, ".")
-			Haza := fmt.Sprint((len(ZombieAddressTable) / Total) * 100)
-			Hazardeous := strings.Split(Haza, ".")
-			logFile := OpenLogFile("Performance")
-			WriteLog(logFile, "pps,"+PPS[0]+",sut,"+SUT+",hazardeous,"+Hazardeous[0]+",totalNode,"+fmt.Sprint(Total))
-			defer logFile.Close()
+			if Total > 0 {
+				temp := fmt.Sprint((len(CurrentAddressTable) / Total) * 100)
+				PPS := strings.Split(temp, ".")
+				Haza := fmt.Sprint((len(ZombieAddressTable) / Total) * 100)
+				Hazardeous := strings.Split(Haza, ".")
+				logFile := OpenLogFile("Performance")
+				WriteLog(logFile, "pps,"+PPS[0]+",sut,"+SUT+",hazardeous,"+Hazardeous[0]+",totalNode,"+fmt.Sprint(Total))
+				defer logFile.Close()
+			}
 		}
 	}()
 	go func() {
@@ -148,15 +150,15 @@ func Server() {
 			time.Sleep(3000 * time.Millisecond)
 		}
 	}()
-	go func() {
-		for {
-			// WriteLog("power:on" + "\n")
-			logFile := OpenLogFile("General")
-			WriteLog(logFile, "starttime,"+Boot.Format("2006-01-02 15:04:05")+","+"name,Atena,"+"power,on,"+"strategy,"+Strategy+","+"enlapsedTime,"+time.Since(Boot).String())
-			defer logFile.Close()
-			time.Sleep(10000 * time.Millisecond)
-		}
-	}()
+	// go func() {
+	// 	for {
+	// 		// WriteLog("power:on" + "\n")
+	// 		logFile := OpenLogFile("General")
+	// 		WriteLog(logFile, "starttime,"+Boot.Format("2006-01-02 15:04:05")+","+"name,Atena,"+"power,on,"+"strategy,"+Strategy+","+"enlapsedTime,"+time.Since(Boot).String())
+	// 		defer logFile.Close()
+	// 		time.Sleep(10000 * time.Millisecond)
+	// 	}
+	// }()
 	go func() {
 		for {
 			if len(CurrentAddressTable) > 0 {
@@ -178,8 +180,11 @@ func Server() {
 	}()
 	go func() {
 		for {
-			time.Sleep(10 * time.Millisecond)
-			PingReq()
+			Total := len(CurrentAddressTable) + len(ReadyAddressTable) + len(ZombieAddressTable)
+			if Total > 0 {
+				time.Sleep(3 * time.Second)
+				PingReq()
+			}
 		}
 	}()
 	log.Fatal(http.ListenAndServe(":"+config.Port, nil))
@@ -346,8 +351,11 @@ func TableUpdateAlarm() {
 func PingReq() {
 	for Node, NodeAddress := range CurrentAddressTable {
 		GroupName := "Current"
-		Json_Data, _ := json.Marshal(GroupName)
-		res, err := http.Post("http://"+NodeAddress+"/PingReq", "applicaion/json", bytes.NewBuffer(Json_Data))
+		json_Data, err := json.Marshal(GroupName)
+		var Data []byte
+		_, err = Client[NodeAddress].Write(json_Data)
+		_, err = Client[NodeAddress].Read(Data)
+		Memory := string(Data)
 		if err != nil {
 			delete(CurrentAddressTable, Node)
 			if len(ReadyAddressTable) > 0 {
@@ -376,9 +384,14 @@ func PingReq() {
 			// WriteLog("error: " + err.Error() + "\n")
 			// CloseLogFile()
 		} else {
-			NodeStatus := new(Status)
-			json.NewDecoder(res.Body).Decode(&NodeStatus)
-			if NodeStatus.MemoryUsage >= Threshold {
+			MemoryUsage, err := strconv.Atoi(Memory)
+			if err != nil {
+				logFile := OpenLogFile("Error")
+				WriteLog(logFile, "error,"+err.Error())
+				defer logFile.Close()
+			}
+
+			if MemoryUsage >= Threshold {
 				//NodeSwitching
 				if len(CurrentAddressTable) <= 4 {
 					ScaleUp()
@@ -392,24 +405,26 @@ func PingReq() {
 			}
 		}
 	}
-	for _, NodeAddress := range ReadyAddressTable {
+	for Node, NodeAddress := range ReadyAddressTable {
 		GroupName := "Ready"
-		Json_Data, _ := json.Marshal(GroupName)
-		res, err := http.Post("http://"+NodeAddress+"/PingReq", "application/json", bytes.NewBuffer(Json_Data))
+		json_Data, err := json.Marshal(GroupName)
+		var Data []byte
+		_, err = Client[NodeAddress].Write(json_Data)
+		_, err = Client[NodeAddress].Read(Data)
 		if err != nil {
 			logFile := OpenLogFile("Disconnection")
 			WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"1")
+			delete(ReadyAddressTable, Node)
 			defer logFile.Close()
-		} else {
-			NodeStatus := new(Status)
-			json.NewDecoder(res.Body).Decode(&NodeStatus)
-			NodeStatus.Address = NodeAddress
-			NodeStatus.GroupName = "Ready"
 		}
 	}
 	for Node, NodeAddress := range ZombieAddressTable {
 		GroupName := "Zombie"
 		Json_Data, _ := json.Marshal(GroupName)
+		Client[NodeAddress].Write(Json_Data)
+		var Data []byte
+		Client[NodeAddress].Read(Data)
+		Memory := string(Data)
 		res, err := http.Post("http://"+NodeAddress+"/PingReq", "application/json", bytes.NewBuffer(Json_Data))
 		if err != nil {
 			logFile := OpenLogFile("Disconnection")
@@ -418,7 +433,13 @@ func PingReq() {
 		} else {
 			NodeStatus := new(Status)
 			json.NewDecoder(res.Body).Decode(&NodeStatus)
-			if NodeStatus.MemoryUsage <= 20 {
+			MemoryUsage, err := strconv.Atoi(Memory)
+			if err != nil {
+				logFile := OpenLogFile("Error")
+				WriteLog(logFile, "error,"+err.Error())
+				defer logFile.Close()
+			}
+			if MemoryUsage <= 20 {
 				ReadyAddressTable[Node] = NodeAddress
 				delete(ZombieAddressTable, Node)
 				NodeStatus.Address = NodeAddress
@@ -539,7 +560,9 @@ func CheckHost() {
 		temp = append(temp, V)
 	}
 	logFile := OpenLogFile("Hosts")
-	WriteLog(logFile, NodeNameTable[temp[0]]+","+temp[0]+","+NodeNameTable[temp[1]]+","+temp[1]+","+NodeNameTable[temp[2]]+","+temp[2])
+	for i := 0; i < len(temp); i++ {
+		WriteLog(logFile, NodeNameTable[temp[i]]+","+temp[i])
+	}
 	defer logFile.Close()
 }
 func ChangeStrategy() {

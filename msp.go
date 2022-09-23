@@ -545,7 +545,7 @@ func RegNewNode(w http.ResponseWriter, req *http.Request) {
 			ReadyAddressTable[addr.NewNode] = addr.Address + ":" + addr.NewNode
 			NodeNameTable[addr.Address+":"+addr.NewNode] = addr.NodeName
 		}
-	} else {
+	} else if addr.Type == "2" {
 		ZombieAddressTable[addr.NewNode] = addr.Address + ":" + addr.NewNode
 		NodeNameTable[addr.Address+":"+addr.NewNode] = addr.NodeName
 	}

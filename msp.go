@@ -76,7 +76,7 @@ var StatusOfAll []*Status
 var MyPort string
 var Threshold int
 var Revive int
-var ipBlackList map[int]string
+var ipBlackList []string
 var config ConfigData
 var Hash [32]byte
 var result bool
@@ -104,7 +104,7 @@ func Server() {
 	CurrentAddressTable = make(map[string]string)
 	ReadyAddressTable = make(map[string]string)
 	ZombieAddressTable = make(map[string]string)
-	ipBlackList = make(map[int]string)
+	ipBlackList = make([]string, 100)
 	NodeNameTable = make(map[string]string)
 	Client = make(map[string]net.Conn)
 	// PbftHostAddressTable = make(map[string]string)
@@ -284,7 +284,7 @@ func OpenConnection(DataBase string, UserName string, PassWord string, DataBaseN
 	defer DB.Close()
 	var K int
 	var V string
-	var temp map[int]string
+	var temp []string
 	rows, err := DB.Query("SELECT * FROM IPBlackList")
 	if err != nil {
 		logFile := OpenLogFile("Error")
@@ -308,7 +308,7 @@ func OpenConnection(DataBase string, UserName string, PassWord string, DataBaseN
 	}
 	TableUpdateAlarm()
 }
-func CompareIpBlackList(temp map[int]string) bool {
+func CompareIpBlackList(temp []string) bool {
 	if len(ipBlackList) != len(temp) {
 		// WriteLog("IP BlackList has been Updated" + "\n")
 		ipBlackList = temp
@@ -390,23 +390,24 @@ func PingReq() {
 			// WriteLog("error: " + err.Error() + "\n")
 			// CloseLogFile()
 		} else {
-			MemoryUsage, err := strconv.Atoi(Memory)
-			if err != nil {
-				logFile := OpenLogFile("Error")
-				WriteLog(logFile, "error,"+err.Error())
-				defer logFile.Close()
-			}
-			if MemoryUsage >= Threshold {
-				//NodeSwitching
-				if len(CurrentAddressTable) <= 4 {
-					ScaleUp()
+			if Memory != "" {
+				MemoryUsage, err := strconv.Atoi(Memory)
+				if err != nil {
+					logFile := OpenLogFile("Error")
+					WriteLog(logFile, "error,"+err.Error())
+					defer logFile.Close()
 				}
-				if Strategy == "NORMAL" {
-					ChangeStrategy()
+				if MemoryUsage >= Threshold {
+					//NodeSwitching
+					if len(CurrentAddressTable) <= 4 {
+						ScaleUp()
+					}
+					if Strategy == "NORMAL" {
+						ChangeStrategy()
+					}
+					delete(CurrentAddressTable, Node)
+					ZombieAddressTable[Node] = NodeAddress
 				}
-				delete(CurrentAddressTable, Node)
-				ZombieAddressTable[Node] = NodeAddress
-			} else {
 			}
 		}
 	}
@@ -441,15 +442,17 @@ func PingReq() {
 			WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"2")
 			defer logFile.Close()
 		} else {
-			MemoryUsage, err := strconv.Atoi(Memory)
-			if err != nil {
-				logFile := OpenLogFile("Error")
-				WriteLog(logFile, "error,"+err.Error())
-				defer logFile.Close()
-			}
-			if MemoryUsage <= 20 {
-				ReadyAddressTable[Node] = NodeAddress
-				delete(ZombieAddressTable, Node)
+			if Memory != "" {
+				MemoryUsage, _ := strconv.Atoi(Memory)
+				if err != nil {
+					logFile := OpenLogFile("Error")
+					WriteLog(logFile, "error,"+err.Error())
+					defer logFile.Close()
+				}
+				if MemoryUsage <= 20 {
+					ReadyAddressTable[Node] = NodeAddress
+					delete(ZombieAddressTable, Node)
+				}
 			}
 		}
 	}
@@ -500,7 +503,7 @@ func RegNewNode(w http.ResponseWriter, req *http.Request) {
 	logFile := OpenLogFile("NewNode")
 	WriteLog(logFile, "nodeName,"+addr.NodeName+",type,"+addr.Type+",address,"+addr.Address+":"+addr.NewNode)
 	w.Header().Set("Content-Type", "application/json")
-	ipBlackList := "abcd"
+	ipBlackList[0] = "abcd"
 	json.NewEncoder(w).Encode(ipBlackList)
 	port, err := strconv.Atoi(addr.NewNode)
 	if err != nil {

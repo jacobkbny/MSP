@@ -352,13 +352,11 @@ func TableUpdateAlarm() {
 }
 func PingReq() {
 	for Node, NodeAddress := range CurrentAddressTable {
-		var Data []byte
+		Data := []byte{}
 		temp := strings.Split(NodeAddress, ":")
 		port, err := strconv.Atoi(temp[1])
 		if Client[temp[0]+":"+fmt.Sprint(port+100)] != nil {
-			var Zero time.Time
-			Zero = time.Now()
-			err = Client[temp[0]+":"+fmt.Sprint(port+100)].SetDeadline(Zero.Add(30 * time.Millisecond))
+			err = Client[temp[0]+":"+fmt.Sprint(port+100)].SetDeadline(time.Now().Add(3 * time.Second))
 			if err != nil {
 				logFile := OpenLogFile("Disconnection")
 				WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"1")
@@ -366,6 +364,11 @@ func PingReq() {
 			}
 			json.NewEncoder(Client[temp[0]+":"+fmt.Sprint(port+100)]).Encode("Current")
 			_, err = Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
+			if Data == nil {
+				logFile := OpenLogFile("Disconnection")
+				WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"1")
+				defer logFile.Close()
+			}
 			if err != nil {
 				logFile := OpenLogFile("Disconnection")
 				WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"1")
@@ -428,9 +431,7 @@ func PingReq() {
 		temp := strings.Split(NodeAddress, ":")
 		port, err := strconv.Atoi(temp[1])
 		if Client[temp[0]+":"+fmt.Sprint(port+100)] != nil {
-			var Zero time.Time
-			Zero = time.Now()
-			err = Client[temp[0]+":"+fmt.Sprint(port+100)].SetDeadline(Zero.Add(30 * time.Millisecond))
+			err = Client[temp[0]+":"+fmt.Sprint(port+100)].SetDeadline(time.Now().Add(3 * time.Second))
 			if err != nil {
 				logFile := OpenLogFile("Disconnection")
 				WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"1")
@@ -460,9 +461,7 @@ func PingReq() {
 		temp := strings.Split(NodeAddress, ":")
 		port, err := strconv.Atoi(temp[1])
 		if Client[temp[0]+":"+fmt.Sprint(port+100)] != nil {
-			var Zero time.Time
-			Zero = time.Now()
-			err = Client[temp[0]+":"+fmt.Sprint(port+100)].SetDeadline(Zero.Add(30 * time.Millisecond))
+			err = Client[temp[0]+":"+fmt.Sprint(port+100)].SetDeadline(time.Now().Add(3 * time.Second))
 			if err != nil {
 				logFile := OpenLogFile("Disconnection")
 				WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"2")

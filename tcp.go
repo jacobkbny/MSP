@@ -2,6 +2,7 @@ package main
 
 import (
 	"net"
+	"time"
 )
 
 var Client map[string]net.Conn
@@ -97,6 +98,7 @@ func TCPConnection(address string, port string) {
 		defer logFile.Close()
 	}
 	Client[address+":"+port] = client
+	client.SetDeadline(time.Now().Add(3 * time.Second))
 }
 
 // 4000,, 4001 for differenciation I have to make Client is like Client map[string]net.Conn

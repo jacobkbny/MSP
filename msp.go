@@ -16,7 +16,6 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/prometheus/procfs"
 )
 
 type ReqData struct {
@@ -354,8 +353,12 @@ func PingReq() {
 		var Data []byte
 		temp := strings.Split(NodeAddress, ":")
 		port, err := strconv.Atoi(temp[1])
-		json.NewEncoder(Client[temp[0]+":"+fmt.Sprint(port+100)]).Encode("Current")
-		_, err = Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
+		if Client[temp[0]+":"+fmt.Sprint(port+100)] != nil {
+			json.NewEncoder(Client[temp[0]+":"+fmt.Sprint(port+100)]).Encode("Current")
+			_, err = Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
+		} else {
+			delete(Client, temp[0]+":"+fmt.Sprint(port+100))
+		}
 		Memory := string(Data)
 		if err != nil {
 			delete(CurrentAddressTable, Node)
@@ -391,7 +394,6 @@ func PingReq() {
 				WriteLog(logFile, "error,"+err.Error())
 				defer logFile.Close()
 			}
-
 			if MemoryUsage >= Threshold {
 				//NodeSwitching
 				if len(CurrentAddressTable) <= 4 {
@@ -409,9 +411,11 @@ func PingReq() {
 	for Node, NodeAddress := range ReadyAddressTable {
 		temp := strings.Split(NodeAddress, ":")
 		port, err := strconv.Atoi(temp[1])
-		json.NewEncoder(Client[temp[0]+":"+fmt.Sprint(port+100)]).Encode("Ready")
-		var Data []byte
-		_, err = Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
+		if Client[temp[0]+":"+fmt.Sprint(port+100)] != nil {
+			json.NewEncoder(Client[temp[0]+":"+fmt.Sprint(port+100)]).Encode("Ready")
+		} else {
+			delete(Client, temp[0]+":"+fmt.Sprint(port+100))
+		}
 		if err != nil {
 			logFile := OpenLogFile("Disconnection")
 			WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"1")
@@ -420,11 +424,15 @@ func PingReq() {
 		}
 	}
 	for Node, NodeAddress := range ZombieAddressTable {
+		var Data []byte
 		temp := strings.Split(NodeAddress, ":")
 		port, err := strconv.Atoi(temp[1])
-		json.NewEncoder(Client[temp[0]+":"+fmt.Sprint(port+100)]).Encode("Zombie")
-		var Data []byte
-		_, err = Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
+		if Client[temp[0]+":"+fmt.Sprint(port+100)] != nil {
+			json.NewEncoder(Client[temp[0]+":"+fmt.Sprint(port+100)]).Encode("Ready")
+			_, err = Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
+		} else {
+			delete(Client, temp[0]+":"+fmt.Sprint(port+100))
+		}
 		Memory := string(Data)
 		if err != nil {
 			logFile := OpenLogFile("Disconnection")
@@ -466,23 +474,24 @@ func PingReq() {
 	// 	}
 	// }
 }
-func SendPingRes(StatusOfAll []*Status) {
-	pid := os.Getpid()
-	p, err := procfs.NewProc(pid)
-	if err != nil {
-		logFile := OpenLogFile("Error")
-		WriteLog(logFile, "error,"+err.Error())
-		defer logFile.Close()
-	}
-	stat, err := p.Stat()
-	if err != nil {
-		logFile := OpenLogFile("Error")
-		WriteLog(logFile, "error,"+err.Error())
-		defer logFile.Close()
-	}
-	MyStatus := Status{GetMyIP() + MyPort, "MSP", stat.ResidentMemory(), stat.ResidentMemory()}
-	StatusOfAll = append(StatusOfAll, &MyStatus)
-}
+
+//	func SendPingRes(StatusOfAll []*Status) {
+//		pid := os.Getpid()
+//		p, err := procfs.NewProc(pid)
+//		if err != nil {
+//			logFile := OpenLogFile("Error")
+//			WriteLog(logFile, "error,"+err.Error())
+//			defer logFile.Close()
+//		}
+//		stat, err := p.Stat()
+//		if err != nil {
+//			logFile := OpenLogFile("Error")
+//			WriteLog(logFile, "error,"+err.Error())
+//			defer logFile.Close()
+//		}
+//		MyStatus := Status{GetMyIP() + MyPort, "MSP", stat.ResidentMemory(), stat.ResidentMemory()}
+//		StatusOfAll = append(StatusOfAll, &MyStatus)
+//	}
 func RegNewNode(w http.ResponseWriter, req *http.Request) {
 	addr := new(Addr)
 	json.NewDecoder(req.Body).Decode(addr)
@@ -527,8 +536,10 @@ func RegNewNode(w http.ResponseWriter, req *http.Request) {
 				// }
 			}
 			logFile := OpenLogFile("Hosts")
-			WriteLog(logFile, NodeNameTable[Hosts[0]]+","+Hosts[0]+","+NodeNameTable[Hosts[1]]+","+Hosts[1]+","+NodeNameTable[Hosts[2]]+","+Hosts[2])
-			defer logFile.Close()
+			for i := 0; i < len(Hosts); i++ {
+				WriteLog(logFile, NodeNameTable[Hosts[i]]+","+Hosts[i])
+				defer logFile.Close()
+			}
 		}
 		once.Do(FirstHosts)
 	}

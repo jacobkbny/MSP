@@ -15,7 +15,7 @@ func OpenLogFile(fileName string) *os.File {
 	// log file name is current day
 	date := time.Now().Format("2006-01-02")
 	logFolderPath := "./log"
-	logFilePath := fmt.Sprintf("%s-%s.txt", date, fileName)
+	logFilePath := fmt.Sprintf("%s/%s-%s.txt", logFolderPath, date, fileName)
 	if _, err := os.Stat(logFolderPath); os.IsNotExist(err) {
 		os.MkdirAll(logFolderPath, 0777)
 	}

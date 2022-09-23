@@ -125,9 +125,9 @@ func Server() {
 			time.Sleep(100 * time.Second)
 			Total := len(CurrentAddressTable) + len(ReadyAddressTable) + len(ZombieAddressTable)
 			if Total > 0 {
-				temp := fmt.Sprint((len(CurrentAddressTable) / Total) * 100)
+				temp := fmt.Sprint((len(CurrentAddressTable) / Total) * 100.0)
 				PPS := strings.Split(temp, ".")
-				Haza := fmt.Sprint((len(ZombieAddressTable) / Total) * 100)
+				Haza := fmt.Sprint((len(ZombieAddressTable) / Total) * 100.0)
 				Hazardeous := strings.Split(Haza, ".")
 				logFile := OpenLogFile("Performance")
 				WriteLog(logFile, "pps,"+PPS[0]+",sut,"+SUT+",hazardeous,"+Hazardeous[0]+",totalNode,"+fmt.Sprint(Total))
@@ -359,7 +359,7 @@ func PingReq() {
 		} else {
 			delete(Client, temp[0]+":"+fmt.Sprint(port+100))
 		}
-		Memory := string(Data)
+		Memory := string(Data[:])
 		if err != nil {
 			delete(CurrentAddressTable, Node)
 			if len(ReadyAddressTable) > 0 {
@@ -507,7 +507,7 @@ func RegNewNode(w http.ResponseWriter, req *http.Request) {
 		defer logFile.Close()
 	}
 	TCPConnection(addr.Address, fmt.Sprint(port+100))
-	if addr.Type == "1" {
+	if addr.Type == "1" && Strategy == "NORMAL" {
 		if len(CurrentAddressTable) <= 4 {
 			CurrentAddressTable[addr.NewNode] = addr.Address + ":" + addr.NewNode
 			NodeNameTable[addr.Address+":"+addr.NewNode] = addr.NodeName
@@ -518,8 +518,16 @@ func RegNewNode(w http.ResponseWriter, req *http.Request) {
 		// } else if addr.Type == "3" {
 		// 	PbftReadyAddressTable[addr.NewNode] = addr.Address + ":" + addr.NewNode
 		// 	NodeNameTable[addr.NewNode] = addr.NodeName
+	} else {
+		ZombieAddressTable[addr.NewNode] = addr.Address + ":" + addr.NewNode
+		NodeNameTable[addr.Address+":"+addr.NewNode] = addr.NodeName
 	}
-	{
+	if addr.Type == "1" && Strategy == "ABNORMAL" {
+		CurrentAddressTable[addr.NewNode] = addr.Address + ":" + addr.NewNode
+		NodeNameTable[addr.Address+":"+addr.NewNode] = addr.NodeName
+		Data, _ := json.Marshal(CurrentAddressTable[addr.NewNode])
+		http.Post("http://localhost:7000/UpdateHost", "application/json", bytes.NewBuffer(Data))
+	} else {
 		ZombieAddressTable[addr.NewNode] = addr.Address + ":" + addr.NewNode
 		NodeNameTable[addr.Address+":"+addr.NewNode] = addr.NodeName
 	}
@@ -529,14 +537,14 @@ func RegNewNode(w http.ResponseWriter, req *http.Request) {
 			var Hosts []string
 			for _, V := range CurrentAddressTable {
 				Hosts = append(Hosts, V)
-				// if len(HostAddressTable) == 3 {
-				// 	// Data, _ := json.Marshal(Hosts)
-				// 	// http.Post("http://localhost:7000/UpdateHost", "application/json", bytes.NewBuffer(Data))
-				// 	break
+				// if len(CurrentAddressTable) == 4 {
+				Data, _ := json.Marshal(Hosts)
+				http.Post("http://localhost:7000/UpdateHost", "application/json", bytes.NewBuffer(Data))
+				break
 				// }
 			}
-			logFile := OpenLogFile("Hosts")
 			for i := 0; i < len(Hosts); i++ {
+				logFile := OpenLogFile("Hosts")
 				WriteLog(logFile, NodeNameTable[Hosts[i]]+","+Hosts[i])
 				defer logFile.Close()
 			}
@@ -635,6 +643,7 @@ func CheckZombie() {
 	}
 }
 func ScaleUp() {
+	start := time.Now()
 	Data, err := json.Marshal(ReadyAddressTable)
 	if err != nil {
 		logFile := OpenLogFile("Error")
@@ -647,6 +656,7 @@ func ScaleUp() {
 		WriteLog(logFile, "error,"+err.Error())
 		defer logFile.Close()
 	}
+	SUT = time.Since(start).String()
 }
 
 //----------------------- LazyBoy-----------------------------------

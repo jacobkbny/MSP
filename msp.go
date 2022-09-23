@@ -104,7 +104,7 @@ func Server() {
 	CurrentAddressTable = make(map[string]string)
 	ReadyAddressTable = make(map[string]string)
 	ZombieAddressTable = make(map[string]string)
-	ipBlackList = make([]string, 0)
+	ipBlackList = make([]string, 10)
 	NodeNameTable = make(map[string]string)
 	Client = make(map[string]net.Conn)
 	// PbftHostAddressTable = make(map[string]string)
@@ -361,11 +361,16 @@ func PingReq() {
 			err = Client[temp[0]+":"+fmt.Sprint(port+100)].SetDeadline(Zero.Add(30 * time.Millisecond))
 			if err != nil {
 				logFile := OpenLogFile("Disconnection")
-				WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"2")
+				WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"1")
 				defer logFile.Close()
 			}
 			json.NewEncoder(Client[temp[0]+":"+fmt.Sprint(port+100)]).Encode("Current")
 			_, err = Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
+			if err != nil {
+				logFile := OpenLogFile("Disconnection")
+				WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"1")
+				defer logFile.Close()
+			}
 		} else {
 			delete(Client, temp[0]+":"+fmt.Sprint(port+100))
 		}
@@ -428,10 +433,18 @@ func PingReq() {
 			err = Client[temp[0]+":"+fmt.Sprint(port+100)].SetDeadline(Zero.Add(30 * time.Millisecond))
 			if err != nil {
 				logFile := OpenLogFile("Disconnection")
-				WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"2")
+				WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"1")
 				defer logFile.Close()
 			}
 			json.NewEncoder(Client[temp[0]+":"+fmt.Sprint(port+100)]).Encode("Ready")
+			var Data []byte
+			_, err = Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
+			if err != nil {
+				logFile := OpenLogFile("Disconnection")
+				WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"1")
+				defer logFile.Close()
+			}
+			Data = []byte{}
 		} else {
 			delete(Client, temp[0]+":"+fmt.Sprint(port+100))
 		}
@@ -457,6 +470,11 @@ func PingReq() {
 			}
 			json.NewEncoder(Client[temp[0]+":"+fmt.Sprint(port+100)]).Encode("Ready")
 			_, err = Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
+			if err != nil {
+				logFile := OpenLogFile("Disconnection")
+				WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"2")
+				defer logFile.Close()
+			}
 		} else {
 			delete(Client, temp[0]+":"+fmt.Sprint(port+100))
 		}
@@ -527,7 +545,7 @@ func RegNewNode(w http.ResponseWriter, req *http.Request) {
 	logFile := OpenLogFile("NewNode")
 	WriteLog(logFile, "nodeName,"+addr.NodeName+",type,"+addr.Type+",address,"+addr.Address+":"+addr.NewNode)
 	w.Header().Set("Content-Type", "application/json")
-	ipBlackList[0] = "abcd"
+	ipBlackList = append(ipBlackList, "abcd")
 	json.NewEncoder(w).Encode(ipBlackList)
 	port, err := strconv.Atoi(addr.NewNode)
 	if err != nil {
@@ -593,15 +611,17 @@ func RegNewNode(w http.ResponseWriter, req *http.Request) {
 //		WriteLog("Hosts:" + Hosts[0] + Hosts[1] + Hosts[2])
 //	}
 func CheckHost() {
-	var temp []string
-	for _, V := range CurrentAddressTable {
-		temp = append(temp, V)
+	if len(CurrentAddressTable) >= 4 {
+		var temp []string
+		for _, V := range CurrentAddressTable {
+			temp = append(temp, V)
+		}
+		logFile := OpenLogFile("Hosts")
+		for i := 0; i < len(temp); i++ {
+			WriteLog(logFile, NodeNameTable[temp[i]]+","+temp[i])
+		}
+		defer logFile.Close()
 	}
-	logFile := OpenLogFile("Hosts")
-	for i := 0; i < len(temp); i++ {
-		WriteLog(logFile, NodeNameTable[temp[i]]+","+temp[i])
-	}
-	defer logFile.Close()
 }
 func ChangeStrategy() {
 	Strategy = "ABNORMAL"

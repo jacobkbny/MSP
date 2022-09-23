@@ -364,22 +364,20 @@ func PingReq() {
 			}
 			json.NewEncoder(Client[temp[0]+":"+fmt.Sprint(port+100)]).Encode("Current")
 			_, err = Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
-			if Data == nil {
-				logFile := OpenLogFile("Disconnection")
-				WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"1")
-				defer logFile.Close()
-			}
 			if err != nil {
-				logFile := OpenLogFile("Disconnection")
-				WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"1")
+				logFile := OpenLogFile("Error")
+				WriteLog(logFile, "error,"+err.Error())
 				defer logFile.Close()
 			}
-		} else {
-			delete(Client, temp[0]+":"+fmt.Sprint(port+100))
+			time.Sleep(5 * time.Millisecond)
 		}
-		Memory := string(Data[:])
-		if err != nil {
+		if Data == nil {
+			logFile := OpenLogFile("Disconnection")
+			WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"1")
+			defer logFile.Close()
+			Client[temp[0]+":"+fmt.Sprint(port+100)].Close()
 			delete(CurrentAddressTable, Node)
+			delete(Client, temp[0]+":"+fmt.Sprint(port+100))
 			if len(ReadyAddressTable) > 0 {
 				for K, V := range ReadyAddressTable {
 					address, err := json.Marshal(V)
@@ -399,31 +397,25 @@ func PingReq() {
 					break
 				}
 			}
-			logFile := OpenLogFile("Disconnection")
-			WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"1")
-			defer logFile.Close()
-			// WriteLog("Disconnected: " + NodeNameTable[Node] + NodeAddress + " " + "1" + "\n")
-			// WriteLog("error: " + err.Error() + "\n")
-			// CloseLogFile()
-		} else {
-			if Memory != "" {
-				MemoryUsage, err := strconv.Atoi(Memory)
-				if err != nil {
-					logFile := OpenLogFile("Error")
-					WriteLog(logFile, "error,"+err.Error())
-					defer logFile.Close()
+		}
+		Memory := string(Data[:])
+		if Memory != "" {
+			MemoryUsage, err := strconv.Atoi(Memory)
+			if err != nil {
+				logFile := OpenLogFile("Error")
+				WriteLog(logFile, "error,"+err.Error())
+				defer logFile.Close()
+			}
+			if MemoryUsage >= Threshold {
+				//NodeSwitching
+				if len(CurrentAddressTable) <= 4 {
+					ScaleUp()
 				}
-				if MemoryUsage >= Threshold {
-					//NodeSwitching
-					if len(CurrentAddressTable) <= 4 {
-						ScaleUp()
-					}
-					if Strategy == "NORMAL" {
-						ChangeStrategy()
-					}
-					delete(CurrentAddressTable, Node)
-					ZombieAddressTable[Node] = NodeAddress
+				if Strategy == "NORMAL" {
+					ChangeStrategy()
 				}
+				delete(CurrentAddressTable, Node)
+				ZombieAddressTable[Node] = NodeAddress
 			}
 		}
 	}
@@ -431,29 +423,23 @@ func PingReq() {
 		temp := strings.Split(NodeAddress, ":")
 		port, err := strconv.Atoi(temp[1])
 		if Client[temp[0]+":"+fmt.Sprint(port+100)] != nil {
-			err = Client[temp[0]+":"+fmt.Sprint(port+100)].SetDeadline(time.Now().Add(3 * time.Second))
-			if err != nil {
-				logFile := OpenLogFile("Disconnection")
-				WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"1")
-				defer logFile.Close()
-			}
 			json.NewEncoder(Client[temp[0]+":"+fmt.Sprint(port+100)]).Encode("Ready")
 			var Data []byte
 			_, err = Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
 			if err != nil {
+				logFile := OpenLogFile("Error")
+				WriteLog(logFile, "error,"+err.Error())
+				defer logFile.Close()
+			}
+			time.Sleep(5 * time.Millisecond)
+			if Data == nil {
 				logFile := OpenLogFile("Disconnection")
 				WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"1")
 				defer logFile.Close()
+				delete(ReadyAddressTable, Node)
+				delete(Client, temp[0]+":"+fmt.Sprint(port+100))
 			}
 			Data = []byte{}
-		} else {
-			delete(Client, temp[0]+":"+fmt.Sprint(port+100))
-		}
-		if err != nil {
-			logFile := OpenLogFile("Disconnection")
-			WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"1")
-			delete(ReadyAddressTable, Node)
-			defer logFile.Close()
 		}
 	}
 	for Node, NodeAddress := range ZombieAddressTable {
@@ -461,65 +447,59 @@ func PingReq() {
 		temp := strings.Split(NodeAddress, ":")
 		port, err := strconv.Atoi(temp[1])
 		if Client[temp[0]+":"+fmt.Sprint(port+100)] != nil {
-			err = Client[temp[0]+":"+fmt.Sprint(port+100)].SetDeadline(time.Now().Add(3 * time.Second))
-			if err != nil {
-				logFile := OpenLogFile("Disconnection")
-				WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"2")
-				defer logFile.Close()
-			}
-			json.NewEncoder(Client[temp[0]+":"+fmt.Sprint(port+100)]).Encode("Ready")
+			json.NewEncoder(Client[temp[0]+":"+fmt.Sprint(port+100)]).Encode("Zombie")
 			_, err = Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
+			time.Sleep(5 * time.Millisecond)
+			if Data == nil {
+				Client[temp[0]+":"+fmt.Sprint(port+100)].Close()
+				delete(ZombieAddressTable, Node)
+				delete(Client, temp[0]+":"+fmt.Sprint(port+100))
+			}
 			if err != nil {
 				logFile := OpenLogFile("Disconnection")
 				WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"2")
 				defer logFile.Close()
 			}
-		} else {
-			delete(Client, temp[0]+":"+fmt.Sprint(port+100))
 		}
 		Memory := string(Data)
-		if err != nil {
-			logFile := OpenLogFile("Disconnection")
-			WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"2")
-			defer logFile.Close()
-		} else {
-			if Memory != "" {
-				MemoryUsage, _ := strconv.Atoi(Memory)
-				if err != nil {
-					logFile := OpenLogFile("Error")
-					WriteLog(logFile, "error,"+err.Error())
-					defer logFile.Close()
-				}
-				if MemoryUsage <= 20 {
-					ReadyAddressTable[Node] = NodeAddress
-					delete(ZombieAddressTable, Node)
-				}
+		if Memory != "" {
+			MemoryUsage, err := strconv.Atoi(Memory)
+			if err != nil {
+				logFile := OpenLogFile("Error")
+				WriteLog(logFile, "error,"+err.Error())
+				defer logFile.Close()
+			}
+			if MemoryUsage <= 20 {
+				ReadyAddressTable[Node] = NodeAddress
+				delete(ZombieAddressTable, Node)
 			}
 		}
 	}
-	// if len(PbftHostAddressTable) > 0 {
-	// 	for Node, NodeAddress := range PbftHostAddressTable {
-	// 		_, err := http.Post("http://"+NodeAddress+"/PingReq", "text/plain", nil)
-	// 		if err != nil {
-	// 			logFile := OpenLogFile("Error")
-	// 			WriteLog(logFile, "error,"+err.Error())
-	// 			WriteLog(logFile, "pBFTDisconnected,"+NodeAddress+","+"type,"+"3")
-	// 			defer logFile.Close()
-	// 			delete(PbftHostAddressTable, Node)
-	// 		}
-	// 	}
-	// }
-	// for Node, NodeAddress := range PbftReadyAddressTable {
-	// 	_, err := http.Post("http://"+NodeAddress+"/PingReq", "text/plain", nil)
-	// 	if err != nil {
-	// 		logFile := OpenLogFile("Error")
-	// 		WriteLog(logFile, "error,"+err.Error())
-	// 		WriteLog(logFile, "pBFTDisconnected,"+NodeAddress+","+"type,"+"3")
-	// 		defer logFile.Close()
-	// 		delete(PbftReadyAddressTable, Node)
-	// 	}
-	// }
 }
+
+// if len(PbftHostAddressTable) > 0 {
+// 	for Node, NodeAddress := range PbftHostAddressTable {
+// 		_, err := http.Post("http://"+NodeAddress+"/PingReq", "text/plain", nil)
+// 		if err != nil {
+// 			logFile := OpenLogFile("Error")
+// 			WriteLog(logFile, "error,"+err.Error())
+// 			WriteLog(logFile, "pBFTDisconnected,"+NodeAddress+","+"type,"+"3")
+// 			defer logFile.Close()
+// 			delete(PbftHostAddressTable, Node)
+// 		}
+// 	}
+// }
+// for Node, NodeAddress := range PbftReadyAddressTable {
+// 	_, err := http.Post("http://"+NodeAddress+"/PingReq", "text/plain", nil)
+// 	if err != nil {
+// 		logFile := OpenLogFile("Error")
+// 		WriteLog(logFile, "error,"+err.Error())
+// 		WriteLog(logFile, "pBFTDisconnected,"+NodeAddress+","+"type,"+"3")
+// 		defer logFile.Close()
+// 		delete(PbftReadyAddressTable, Node)
+// 	}
+// }
+// }
 
 //	func SendPingRes(StatusOfAll []*Status) {
 //		pid := os.Getpid()

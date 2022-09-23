@@ -436,6 +436,7 @@ func PingReq() {
 				logFile := OpenLogFile("Disconnection")
 				WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"1")
 				defer logFile.Close()
+				Client[temp[0]+":"+fmt.Sprint(port+100)].Close()
 				delete(ReadyAddressTable, Node)
 				delete(Client, temp[0]+":"+fmt.Sprint(port+100))
 			}
@@ -451,6 +452,9 @@ func PingReq() {
 			_, err = Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
 			time.Sleep(5 * time.Millisecond)
 			if Data == nil {
+				logFile := OpenLogFile("Disconnection")
+				WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"2")
+				defer logFile.Close()
 				Client[temp[0]+":"+fmt.Sprint(port+100)].Close()
 				delete(ZombieAddressTable, Node)
 				delete(Client, temp[0]+":"+fmt.Sprint(port+100))

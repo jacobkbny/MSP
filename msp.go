@@ -122,12 +122,15 @@ func Server() {
 	// }()
 	go func() {
 		for {
-			time.Sleep(100 * time.Second)
-			Total := len(CurrentAddressTable) + len(ReadyAddressTable) + len(ZombieAddressTable)
+			time.Sleep(3 * time.Second)
+			var Total float64
+			Total = float64(len(CurrentAddressTable) + len(ReadyAddressTable) + len(ZombieAddressTable))
+			CurrentLen := float64(len(CurrentAddressTable))
+			ZombieLen := float64(len(ZombieAddressTable))
 			if Total > 0 {
-				temp := fmt.Sprint((len(CurrentAddressTable) / Total) * 100.0)
+				temp := fmt.Sprint((CurrentLen / Total) * 100.0)
 				PPS := strings.Split(temp, ".")
-				Haza := fmt.Sprint((len(ZombieAddressTable) / Total) * 100.0)
+				Haza := fmt.Sprint((ZombieLen / Total) * 100.0)
 				Hazardeous := strings.Split(Haza, ".")
 				logFile := OpenLogFile("Performance")
 				WriteLog(logFile, "pps,"+PPS[0]+",sut,"+SUT+",hazardeous,"+Hazardeous[0]+",totalNode,"+fmt.Sprint(Total))
@@ -138,7 +141,6 @@ func Server() {
 	go func() {
 		for {
 			time.Sleep(1 * time.Minute)
-			// WriteLog("enlapsedTime:" + time.Since(Boot).String() + "\n")
 			logFile := OpenLogFile("General")
 			WriteLog(logFile, "starttime,"+Boot.Format("2006-01-02 15:04:05")+","+"name,Atena,"+"power,on,"+"strategy,"+Strategy+","+"enlapsedTime,"+time.Since(Boot).String())
 			defer logFile.Close()

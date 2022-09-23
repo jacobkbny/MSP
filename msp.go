@@ -104,7 +104,7 @@ func Server() {
 	CurrentAddressTable = make(map[string]string)
 	ReadyAddressTable = make(map[string]string)
 	ZombieAddressTable = make(map[string]string)
-	ipBlackList = make([]string, 100)
+	ipBlackList = make([]string, 0)
 	NodeNameTable = make(map[string]string)
 	Client = make(map[string]net.Conn)
 	// PbftHostAddressTable = make(map[string]string)
@@ -356,6 +356,14 @@ func PingReq() {
 		temp := strings.Split(NodeAddress, ":")
 		port, err := strconv.Atoi(temp[1])
 		if Client[temp[0]+":"+fmt.Sprint(port+100)] != nil {
+			var Zero time.Time
+			Zero = time.Now()
+			err = Client[temp[0]+":"+fmt.Sprint(port+100)].SetDeadline(Zero.Add(30 * time.Millisecond))
+			if err != nil {
+				logFile := OpenLogFile("Disconnection")
+				WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"2")
+				defer logFile.Close()
+			}
 			json.NewEncoder(Client[temp[0]+":"+fmt.Sprint(port+100)]).Encode("Current")
 			_, err = Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
 		} else {
@@ -415,6 +423,14 @@ func PingReq() {
 		temp := strings.Split(NodeAddress, ":")
 		port, err := strconv.Atoi(temp[1])
 		if Client[temp[0]+":"+fmt.Sprint(port+100)] != nil {
+			var Zero time.Time
+			Zero = time.Now()
+			err = Client[temp[0]+":"+fmt.Sprint(port+100)].SetDeadline(Zero.Add(30 * time.Millisecond))
+			if err != nil {
+				logFile := OpenLogFile("Disconnection")
+				WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"2")
+				defer logFile.Close()
+			}
 			json.NewEncoder(Client[temp[0]+":"+fmt.Sprint(port+100)]).Encode("Ready")
 		} else {
 			delete(Client, temp[0]+":"+fmt.Sprint(port+100))
@@ -431,6 +447,14 @@ func PingReq() {
 		temp := strings.Split(NodeAddress, ":")
 		port, err := strconv.Atoi(temp[1])
 		if Client[temp[0]+":"+fmt.Sprint(port+100)] != nil {
+			var Zero time.Time
+			Zero = time.Now()
+			err = Client[temp[0]+":"+fmt.Sprint(port+100)].SetDeadline(Zero.Add(30 * time.Millisecond))
+			if err != nil {
+				logFile := OpenLogFile("Disconnection")
+				WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"2")
+				defer logFile.Close()
+			}
 			json.NewEncoder(Client[temp[0]+":"+fmt.Sprint(port+100)]).Encode("Ready")
 			_, err = Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
 		} else {
@@ -520,9 +544,6 @@ func RegNewNode(w http.ResponseWriter, req *http.Request) {
 			ReadyAddressTable[addr.NewNode] = addr.Address + ":" + addr.NewNode
 			NodeNameTable[addr.Address+":"+addr.NewNode] = addr.NodeName
 		}
-		// } else if addr.Type == "3" {
-		// 	PbftReadyAddressTable[addr.NewNode] = addr.Address + ":" + addr.NewNode
-		// 	NodeNameTable[addr.NewNode] = addr.NodeName
 	} else {
 		ZombieAddressTable[addr.NewNode] = addr.Address + ":" + addr.NewNode
 		NodeNameTable[addr.Address+":"+addr.NewNode] = addr.NodeName
@@ -531,7 +552,7 @@ func RegNewNode(w http.ResponseWriter, req *http.Request) {
 		CurrentAddressTable[addr.NewNode] = addr.Address + ":" + addr.NewNode
 		NodeNameTable[addr.Address+":"+addr.NewNode] = addr.NodeName
 		Data, _ := json.Marshal(CurrentAddressTable[addr.NewNode])
-		http.Post("http://localhost:7000/UpdateHost", "application/json", bytes.NewBuffer(Data))
+		http.Post("http://"+GetMyIP()+":7000/UpdateHost", "application/json", bytes.NewBuffer(Data))
 	} else {
 		ZombieAddressTable[addr.NewNode] = addr.Address + ":" + addr.NewNode
 		NodeNameTable[addr.Address+":"+addr.NewNode] = addr.NodeName

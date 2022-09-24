@@ -80,6 +80,8 @@ var ipBlackList []string
 var config ConfigData
 var Hash [32]byte
 var result bool
+
+// Key = address , value = NodeName
 var NodeNameTable map[string]string
 var Strategy string
 var Boot time.Time
@@ -561,18 +563,16 @@ func RegNewNode(w http.ResponseWriter, req *http.Request) {
 	if len(CurrentAddressTable) >= 4 {
 		var once sync.Once
 		FirstHosts := func() {
-			var Hosts []string
-			for _, V := range CurrentAddressTable {
-				Hosts = append(Hosts, V)
-				// if len(CurrentAddressTable) == 4 {
-				Data, _ := json.Marshal(Hosts)
-				http.Post("http://localhost:7000/UpdateHost", "application/json", bytes.NewBuffer(Data))
-				break
-				// }
+			Data, err := json.Marshal(CurrentAddressTable)
+			if err != nil {
+				logFile := OpenLogFile("Error")
+				WriteLog(logFile, "error,"+err.Error())
+				defer logFile.Close()
 			}
-			for i := 0; i < len(Hosts); i++ {
+			http.Post("http://"+GetMyIP()+":7000/UpdateHost", "application/json", bytes.NewBuffer(Data))
+			for _, address := range CurrentAddressTable {
 				logFile := OpenLogFile("Hosts")
-				WriteLog(logFile, NodeNameTable[Hosts[i]]+","+Hosts[i])
+				WriteLog(logFile, NodeNameTable[address]+","+address)
 				defer logFile.Close()
 			}
 		}

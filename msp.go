@@ -124,13 +124,13 @@ func Server() {
 	// }()
 	go func() {
 		for {
-			time.Sleep(3 * time.Second)
+			time.Sleep(10 * time.Second)
 			var Total float64
 			Total = float64(len(CurrentAddressTable) + len(ReadyAddressTable) + len(ZombieAddressTable))
 			CurrentLen := float64(len(CurrentAddressTable))
 			ZombieLen := float64(len(ZombieAddressTable))
 			if Total > 0 {
-				temp := fmt.Sprint((CurrentLen / Total) * 100.0)
+				temp := fmt.Sprint((1.0 / CurrentLen) * 100.0)
 				PPS := strings.Split(temp, ".")
 				Haza := fmt.Sprint((ZombieLen / Total) * 100.0)
 				Hazardeous := strings.Split(Haza, ".")
@@ -142,12 +142,13 @@ func Server() {
 	}()
 	go func() {
 		for {
-			time.Sleep(1 * time.Minute)
+			time.Sleep(10 * time.Second)
 			logFile := OpenLogFile("General")
 			WriteLog(logFile, "starttime,"+Boot.Format("2006-01-02 15:04:05")+","+"name,Atena,"+"power,on,"+"strategy,"+Strategy+","+"enlapsedTime,"+time.Since(Boot).String())
 			defer logFile.Close()
 		}
 	}()
+	//check config file if any changes are made
 	go func() {
 		for {
 			CheckConfig()
@@ -163,6 +164,7 @@ func Server() {
 	// 		time.Sleep(10000 * time.Millisecond)
 	// 	}
 	// }()
+	// Check who is working as a host in the GateWay
 	go func() {
 		for {
 			if len(CurrentAddressTable) > 0 {
@@ -173,12 +175,22 @@ func Server() {
 	}()
 	go func() {
 		for {
+			//Check if the attack is over by checking the length of ZombieAddressTable for 5 min
 			if Strategy != "NORMAL" {
 				// CheckLazyBoyHost()
 				CheckZombie()
 				// WriteLog("strategy:" + Strategy + "\n")
-				logFile := OpenLogFile("General")
-				WriteLog(logFile, "starttime,"+Boot.Format("2006-01-02 15:04:05")+","+"name,Atena,"+"power,on,"+"strategy,"+Strategy+","+"enlapsedTime,"+time.Since(Boot).String())
+				// logFile := OpenLogFile("General")
+				// WriteLog(logFile, "starttime,"+Boot.Format("2006-01-02 15:04:05")+","+"name,Atena,"+"power,on,"+"strategy,"+Strategy+","+"enlapsedTime,"+time.Since(Boot).String())
+			}
+		}
+	}()
+	// put the Node in Ready to Current when strategy is not 'NORMAL'
+	go func() {
+		for {
+			if Strategy != "NORMAL" {
+				ScaleUp()
+				time.Sleep(1 * time.Minute)
 			}
 		}
 	}()
@@ -368,14 +380,19 @@ func PingReq() {
 				delete(CurrentAddressTable, Node)
 				delete(Client, temp[0]+":"+fmt.Sprint(port+100))
 				if len(ReadyAddressTable) > 0 {
+
 					for K, V := range ReadyAddressTable {
-						address, err := json.Marshal(V)
+						NewNode := map[string]string{
+							"newIp":    V,
+							"zombieIp": NodeAddress,
+						}
+						address, err := json.Marshal(NewNode)
 						if err != nil {
 							logFile := OpenLogFile("Error")
 							WriteLog(logFile, "error,"+err.Error())
 							defer logFile.Close()
 						}
-						_, err = http.Post("http://"+GetMyIP()+":7000/UpdateHost", "application/json", bytes.NewBuffer(address))
+						_, err = http.Post("http://"+GetMyIP()+":7000/modifyHost", "application/json", bytes.NewBuffer(address))
 						if err != nil {
 							logFile := OpenLogFile("Error")
 							WriteLog(logFile, "error,"+err.Error())
@@ -402,10 +419,6 @@ func PingReq() {
 						defer logFile.Close()
 					}
 					if MemoryUsage >= Threshold {
-						//NodeSwitching
-						if len(CurrentAddressTable) <= 4 {
-							ScaleUp()
-						}
 						if Strategy == "NORMAL" {
 							ChangeStrategy()
 						}
@@ -636,9 +649,9 @@ func CheckZombie() {
 	}
 	if result == 0 {
 		Strategy = "NORMAL"
-		logFile := OpenLogFile("General")
-		WriteLog(logFile, "starttime,"+Boot.Format("2006-01-02 15:04:05")+","+"name,Atena,"+"power,on,"+"strategy,"+Strategy+","+"enlapsedTime,"+time.Since(Boot).String())
-		defer logFile.Close()
+		// logFile := OpenLogFile("General")
+		// WriteLog(logFile, "starttime,"+Boot.Format("2006-01-02 15:04:05")+","+"name,Atena,"+"power,on,"+"strategy,"+Strategy+","+"enlapsedTime,"+time.Since(Boot).String())
+		// defer logFile.Close()
 		Data, _ := json.Marshal(Strategy)
 		for _, V := range CurrentAddressTable {
 			_, err := http.Post("http://"+V+"/ChangeStrategy", "application/json", bytes.NewBuffer(Data))
@@ -659,20 +672,24 @@ func CheckZombie() {
 	}
 }
 func ScaleUp() {
-	start := time.Now()
-	Data, err := json.Marshal(ReadyAddressTable)
-	if err != nil {
-		logFile := OpenLogFile("Error")
-		WriteLog(logFile, "error,"+err.Error())
-		defer logFile.Close()
+	if len(ReadyAddressTable) > 0 {
+		start := time.Now()
+		for K, V := range ReadyAddressTable {
+			CurrentAddressTable[K] = V
+		}
+
+		data, err := json.Marshal(CurrentAddressTable)
+		if err != nil {
+			logFile := OpenLogFile("Error")
+			WriteLog(logFile, "error,"+err.Error())
+			defer logFile.Close()
+		}
+		http.Post("http://"+GetMyIP()+"/UpdateHost", "application/json", bytes.NewBuffer(data))
+		SUT = time.Since(start).String()
+		for k := range ReadyAddressTable {
+			delete(ReadyAddressTable, k)
+		}
 	}
-	_, err = http.Post("http://"+GetMyIP()+":7000/UpdateHost", "application/json", bytes.NewBuffer(Data))
-	if err != nil {
-		logFile := OpenLogFile("Error")
-		WriteLog(logFile, "error,"+err.Error())
-		defer logFile.Close()
-	}
-	SUT = time.Since(start).String()
 }
 
 //----------------------- LazyBoy-----------------------------------

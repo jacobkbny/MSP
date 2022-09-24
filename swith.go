@@ -2,17 +2,28 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 )
 
+type Data struct {
+	Data string `json:"data"`
+}
+
 func SwtichStrategy(w http.ResponseWriter, r *http.Request) {
-	var Data string
-	json.NewDecoder(r.Body).Decode(&Data)
-	if Data == "0" {
-		Strategy = "NORMAL"
+	fmt.Println("Switch Called")
+	data := new(Data)
+	err := json.NewDecoder(r.Body).Decode(&data)
+	if err != nil {
+		fmt.Println(err)
 	}
-	if Data == "1" {
-		ChangeStrategy()
+	if data.Data == "0" {
+		Strategy = "NORMAL"
+		fmt.Println("Strategy", Strategy)
+	}
+	if data.Data == "1" {
+		// ChangeStrategy()
+		fmt.Println("ChangeStrategy")
 	}
 
 }

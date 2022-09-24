@@ -100,9 +100,7 @@ func TCPConnection(address string, port string) {
 }
 
 // 4000,, 4001 for differenciation I have to make Client is like Client map[string]net.Conn
-
 // I made them as a map so I have to test it
-
 func CloseConnection(Client map[string]net.Conn) {
 	for _, V := range Client {
 		V.Close()

@@ -261,7 +261,7 @@ func PrepareData(config ConfigData) []byte {
 }
 func Handlers() {
 	http.HandleFunc("/RegNewNode", RegNewNode)
-	// http.HandleFunc("/ChangeStrategy", ChangeStrategy)
+	http.HandleFunc("/Switch", SwtichStrategy)
 	// http.HandleFunc("/SendBlackIP", SendBlackIP)
 	// http.HandleFunc("/GetLazyBoy", GetLazyBoy)
 	// http.HandleFunc("/Rest", Rest)
@@ -358,12 +358,6 @@ func PingReq() {
 		temp := strings.Split(NodeAddress, ":")
 		port, err := strconv.Atoi(temp[1])
 		if Client[temp[0]+":"+fmt.Sprint(port+100)] != nil {
-			err = Client[temp[0]+":"+fmt.Sprint(port+100)].SetDeadline(time.Now().Add(3 * time.Second))
-			if err != nil {
-				logFile := OpenLogFile("Disconnection")
-				WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"1")
-				defer logFile.Close()
-			}
 			json.NewEncoder(Client[temp[0]+":"+fmt.Sprint(port+100)]).Encode("Current")
 			_, err = Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
 			if err != nil {
@@ -599,11 +593,11 @@ func CheckHost() {
 		for _, V := range CurrentAddressTable {
 			temp = append(temp, V)
 		}
-		logFile := OpenLogFile("Hosts")
 		for i := 0; i < len(temp); i++ {
+			logFile := OpenLogFile("Hosts")
 			WriteLog(logFile, NodeNameTable[temp[i]]+","+temp[i])
+			defer logFile.Close()
 		}
-		defer logFile.Close()
 	}
 }
 func ChangeStrategy() {

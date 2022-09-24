@@ -353,133 +353,122 @@ func TableUpdateAlarm() {
 	}
 }
 func PingReq() {
-	for _, NodeAddress := range CurrentAddressTable {
+	for Node, NodeAddress := range CurrentAddressTable {
 		Data := []byte{}
 		temp := strings.Split(NodeAddress, ":")
 		port, err := strconv.Atoi(temp[1])
 		if Client[temp[0]+":"+fmt.Sprint(port+100)] != nil {
-			_, err = Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
-			if err != nil {
-				logFile := OpenLogFile("Error")
-				WriteLog(logFile, "ReadTimeout,"+err.Error())
-				defer logFile.Close()
-			}
 			err = json.NewEncoder(Client[temp[0]+":"+fmt.Sprint(port+100)]).Encode("Current")
+			// if err exist
 			if err != nil {
-				logFile := OpenLogFile("Test")
-				WriteLog(logFile, "WriteTimeOut,"+NodeAddress+","+"type,"+"1")
+				logFile := OpenLogFile("Disconnection")
+				WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"1")
 				defer logFile.Close()
+				Client[temp[0]+":"+fmt.Sprint(port+100)].Close()
+				delete(CurrentAddressTable, Node)
+				delete(Client, temp[0]+":"+fmt.Sprint(port+100))
+				if len(ReadyAddressTable) > 0 {
+					for K, V := range ReadyAddressTable {
+						address, err := json.Marshal(V)
+						if err != nil {
+							logFile := OpenLogFile("Error")
+							WriteLog(logFile, "error,"+err.Error())
+							defer logFile.Close()
+						}
+						_, err = http.Post("http://"+GetMyIP()+":7000/UpdateHost", "application/json", bytes.NewBuffer(address))
+						if err != nil {
+							logFile := OpenLogFile("Error")
+							WriteLog(logFile, "error,"+err.Error())
+							defer logFile.Close()
+						}
+						CurrentAddressTable[K] = V
+						delete(ReadyAddressTable, K)
+						break
+					}
+				}
+			} else {
+				_, err = Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
+				if err != nil {
+					logFile := OpenLogFile("Error")
+					WriteLog(logFile, "error,"+err.Error())
+					defer logFile.Close()
+				}
+				Memory := string(Data[:])
+				if Memory != "" {
+					MemoryUsage, err := strconv.Atoi(Memory)
+					if err != nil {
+						logFile := OpenLogFile("Error")
+						WriteLog(logFile, "error,"+err.Error())
+						defer logFile.Close()
+					}
+					if MemoryUsage >= Threshold {
+						//NodeSwitching
+						if len(CurrentAddressTable) <= 4 {
+							ScaleUp()
+						}
+						if Strategy == "NORMAL" {
+							ChangeStrategy()
+						}
+						delete(CurrentAddressTable, Node)
+						ZombieAddressTable[Node] = NodeAddress
+					}
+				}
 			}
-
 		}
-		// if Data == nil {
-		// 	logFile := OpenLogFile("Disconnection")
-		// 	WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"1")
-		// 	defer logFile.Close()
-		// 	Client[temp[0]+":"+fmt.Sprint(port+100)].Close()
-		// 	delete(CurrentAddressTable, Node)
-		// 	delete(Client, temp[0]+":"+fmt.Sprint(port+100))
-		// 	if len(ReadyAddressTable) > 0 {
-		// 		for K, V := range ReadyAddressTable {
-		// 			address, err := json.Marshal(V)
-		// 			if err != nil {
-		// 				logFile := OpenLogFile("Error")
-		// 				WriteLog(logFile, "error,"+err.Error())
-		// 				defer logFile.Close()
-		// 			}
-		// 			_, err = http.Post("http://"+GetMyIP()+":7000/UpdateHost", "application/json", bytes.NewBuffer(address))
-		// 			if err != nil {
-		// 				logFile := OpenLogFile("Error")
-		// 				WriteLog(logFile, "error,"+err.Error())
-		// 				defer logFile.Close()
-		// 			}
-		// 			CurrentAddressTable[K] = V
-		// 			delete(ReadyAddressTable, K)
-		// 			break
-		// 		}
-		// 	}
-		// }
-		// Memory := string(Data[:])
-		// if Memory != "" {
-		// 	MemoryUsage, err := strconv.Atoi(Memory)
-		// 	if err != nil {
-		// 		logFile := OpenLogFile("Error")
-		// 		WriteLog(logFile, "error,"+err.Error())
-		// 		defer logFile.Close()
-		// 	}
-		// 	if MemoryUsage >= Threshold {
-		// 		//NodeSwitching
-		// 		if len(CurrentAddressTable) <= 4 {
-		// 			ScaleUp()
-		// 		}
-		// 		if Strategy == "NORMAL" {
-		// 			ChangeStrategy()
-		// 		}
-		// 		delete(CurrentAddressTable, Node)
-		// 		ZombieAddressTable[Node] = NodeAddress
-		// 	}
-		// }
 	}
-	// for Node, NodeAddress := range ReadyAddressTable {
-	// 	temp := strings.Split(NodeAddress, ":")
-	// 	port, err := strconv.Atoi(temp[1])
-	// 	if Client[temp[0]+":"+fmt.Sprint(port+100)] != nil {
-	// 		json.NewEncoder(Client[temp[0]+":"+fmt.Sprint(port+100)]).Encode("Ready")
-	// 		var Data []byte
-	// 		_, err = Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
-	// 		if err != nil {
-	// 			logFile := OpenLogFile("Error")
-	// 			WriteLog(logFile, "error,"+err.Error())
-	// 			defer logFile.Close()
-	// 		}
-	// 		time.Sleep(5 * time.Millisecond)
-	// 		if Data == nil {
-	// 			logFile := OpenLogFile("Disconnection")
-	// 			WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"1")
-	// 			defer logFile.Close()
-	// 			Client[temp[0]+":"+fmt.Sprint(port+100)].Close()
-	// 			delete(ReadyAddressTable, Node)
-	// 			delete(Client, temp[0]+":"+fmt.Sprint(port+100))
-	// 		}
-	// 		Data = []byte{}
-	// 	}
-	// }
-	// for Node, NodeAddress := range ZombieAddressTable {
-	// 	var Data []byte
-	// 	temp := strings.Split(NodeAddress, ":")
-	// 	port, err := strconv.Atoi(temp[1])
-	// 	if Client[temp[0]+":"+fmt.Sprint(port+100)] != nil {
-	// 		json.NewEncoder(Client[temp[0]+":"+fmt.Sprint(port+100)]).Encode("Zombie")
-	// 		_, err = Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
-	// 		time.Sleep(5 * time.Millisecond)
-	// 		if Data == nil {
-	// 			logFile := OpenLogFile("Disconnection")
-	// 			WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"2")
-	// 			defer logFile.Close()
-	// 			Client[temp[0]+":"+fmt.Sprint(port+100)].Close()
-	// 			delete(ZombieAddressTable, Node)
-	// 			delete(Client, temp[0]+":"+fmt.Sprint(port+100))
-	// 		}
-	// 		if err != nil {
-	// 			logFile := OpenLogFile("Disconnection")
-	// 			WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"2")
-	// 			defer logFile.Close()
-	// 		}
-	// 	}
-	// 	Memory := string(Data)
-	// 	if Memory != "" {
-	// 		MemoryUsage, err := strconv.Atoi(Memory)
-	// 		if err != nil {
-	// 			logFile := OpenLogFile("Error")
-	// 			WriteLog(logFile, "error,"+err.Error())
-	// 			defer logFile.Close()
-	// 		}
-	// 		if MemoryUsage <= 20 {
-	// 			ReadyAddressTable[Node] = NodeAddress
-	// 			delete(ZombieAddressTable, Node)
-	// 		}
-	// 	}
-	// }
+	for Node, NodeAddress := range ReadyAddressTable {
+		temp := strings.Split(NodeAddress, ":")
+		port, err := strconv.Atoi(temp[1])
+		if Client[temp[0]+":"+fmt.Sprint(port+100)] != nil {
+			err = json.NewEncoder(Client[temp[0]+":"+fmt.Sprint(port+100)]).Encode("Ready")
+			var Data []byte
+			if err == nil {
+				_, err = Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
+				if err != nil {
+					logFile := OpenLogFile("Disconnection")
+					WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"1")
+					defer logFile.Close()
+				}
+			} else {
+				logFile := OpenLogFile("Disconnection")
+				WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"1")
+				defer logFile.Close()
+				Client[temp[0]+":"+fmt.Sprint(port+100)].Close()
+				delete(ReadyAddressTable, Node)
+				delete(Client, temp[0]+":"+fmt.Sprint(port+100))
+			}
+			Data = []byte{}
+		}
+	}
+	for Node, NodeAddress := range ZombieAddressTable {
+		var Data []byte
+		temp := strings.Split(NodeAddress, ":")
+		port, err := strconv.Atoi(temp[1])
+		if Client[temp[0]+":"+fmt.Sprint(port+100)] != nil {
+			err = json.NewEncoder(Client[temp[0]+":"+fmt.Sprint(port+100)]).Encode("Zombie")
+			if err == nil {
+				_, err = Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
+				if err != nil {
+					logFile := OpenLogFile("Disconnection")
+					WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"2")
+					defer logFile.Close()
+				}
+				Memory := string(Data)
+				if Memory != "" {
+					MemoryUsage, err := strconv.Atoi(Memory)
+					if err != nil {
+						logFile := OpenLogFile("Error")
+						WriteLog(logFile, "error,"+err.Error())
+						defer logFile.Close()
+					}
+					if MemoryUsage <= 20 {
+						ReadyAddressTable[Node] = NodeAddress
+						delete(ZombieAddressTable, Node)
+					}
+				}
+			}
+		}
+	}
 }
 
 // if len(PbftHostAddressTable) > 0 {
@@ -549,8 +538,7 @@ func RegNewNode(w http.ResponseWriter, req *http.Request) {
 	} else if addr.Type == "2" {
 		ZombieAddressTable[addr.NewNode] = addr.Address + ":" + addr.NewNode
 		NodeNameTable[addr.Address+":"+addr.NewNode] = addr.NodeName
-	}
-	if addr.Type == "1" && Strategy == "ABNORMAL" {
+	} else if addr.Type == "1" && Strategy == "ABNORMAL" {
 		CurrentAddressTable[addr.NewNode] = addr.Address + ":" + addr.NewNode
 		NodeNameTable[addr.Address+":"+addr.NewNode] = addr.NodeName
 		Data, _ := json.Marshal(CurrentAddressTable[addr.NewNode])

@@ -358,7 +358,12 @@ func PingReq() {
 		temp := strings.Split(NodeAddress, ":")
 		port, err := strconv.Atoi(temp[1])
 		if Client[temp[0]+":"+fmt.Sprint(port+100)] != nil {
-			json.NewEncoder(Client[temp[0]+":"+fmt.Sprint(port+100)]).Encode("Current")
+			err = json.NewEncoder(Client[temp[0]+":"+fmt.Sprint(port+100)]).Encode("Current")
+			if err != nil {
+				logFile := OpenLogFile("Test")
+				WriteLog(logFile, "Encoding,"+NodeAddress+","+"type,"+"1")
+				defer logFile.Close()
+			}
 			_, err = Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
 			if err != nil {
 				logFile := OpenLogFile("Error")

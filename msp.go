@@ -12,7 +12,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -86,6 +85,7 @@ var NodeNameTable map[string]string
 var Strategy string
 var Boot time.Time
 var SUT string
+var OneTime int
 
 func init() {
 	temp, err := LoadConfig()
@@ -99,6 +99,7 @@ func init() {
 	Revive = digit
 	Hash = MakeHashofConfig(config)
 	Strategy = "NORMAL"
+	OneTime = 0
 }
 func Server() {
 	Boot = time.Now()
@@ -378,21 +379,26 @@ func PingReq() {
 				defer logFile.Close()
 				Client[temp[0]+":"+fmt.Sprint(port+100)].Close()
 				delete(CurrentAddressTable, Node)
+				fmt.Println("delete CurrentAddressTable")
 				delete(Client, temp[0]+":"+fmt.Sprint(port+100))
+				fmt.Println("delete Client")
 				if len(ReadyAddressTable) > 0 {
-
 					for K, V := range ReadyAddressTable {
 						NewNode := map[string]string{
 							"newIp":    V,
 							"zombieIp": NodeAddress,
 						}
+						fmt.Println("Made NewNode")
 						address, err := json.Marshal(NewNode)
+						fmt.Println("Marshaled NewNode")
 						if err != nil {
 							logFile := OpenLogFile("Error")
 							WriteLog(logFile, "error,"+err.Error())
 							defer logFile.Close()
 						}
+						fmt.Println("before make http.Post")
 						_, err = http.Post("http://"+GetMyIP()+":7000/modifyHost", "application/json", bytes.NewBuffer(address))
+						fmt.Println("after make http.Post")
 						if err != nil {
 							logFile := OpenLogFile("Error")
 							WriteLog(logFile, "error,"+err.Error())
@@ -560,24 +566,22 @@ func RegNewNode(w http.ResponseWriter, req *http.Request) {
 		ZombieAddressTable[addr.NewNode] = addr.Address + ":" + addr.NewNode
 		NodeNameTable[addr.Address+":"+addr.NewNode] = addr.NodeName
 	}
-	if len(CurrentAddressTable) >= 4 {
-		var once sync.Once
-		FirstHosts := func() {
-			Data, err := json.Marshal(CurrentAddressTable)
-			if err != nil {
-				logFile := OpenLogFile("Error")
-				WriteLog(logFile, "error,"+err.Error())
-				defer logFile.Close()
-			}
-			http.Post("http://"+GetMyIP()+":7000/UpdateHost", "application/json", bytes.NewBuffer(Data))
-			for _, address := range CurrentAddressTable {
-				logFile := OpenLogFile("Hosts")
-				WriteLog(logFile, NodeNameTable[address]+","+address)
-				defer logFile.Close()
-			}
+	if len(CurrentAddressTable) >= 4 && OneTime == 0 {
+		Data, err := json.Marshal(CurrentAddressTable)
+		if err != nil {
+			logFile := OpenLogFile("Error")
+			WriteLog(logFile, "error,"+err.Error())
+			defer logFile.Close()
 		}
-		once.Do(FirstHosts)
+		http.Post("http://"+GetMyIP()+":7000/UpdateHost", "application/json", bytes.NewBuffer(Data))
+		for _, address := range CurrentAddressTable {
+			logFile := OpenLogFile("Hosts")
+			WriteLog(logFile, NodeNameTable[address]+","+address)
+			defer logFile.Close()
+		}
+		OneTime++
 	}
+
 }
 
 //	func InitialHosts() {

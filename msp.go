@@ -126,8 +126,8 @@ func Server() {
 	go func() {
 		for {
 			time.Sleep(10 * time.Second)
-			var Total float64
-			Total = float64(len(CurrentAddressTable) + len(ReadyAddressTable) + len(ZombieAddressTable))
+			// var Total float64
+			Total := float64(len(CurrentAddressTable) + len(ReadyAddressTable) + len(ZombieAddressTable))
 			CurrentLen := float64(len(CurrentAddressTable))
 			ZombieLen := float64(len(ZombieAddressTable))
 			if Total > 0 {

@@ -187,14 +187,14 @@ func Server() {
 		}
 	}()
 	// put the Node in Ready to Current when strategy is not 'NORMAL'
-	go func() {
-		for {
-			if Strategy != "NORMAL" {
-				ScaleUp()
-				time.Sleep(1 * time.Minute)
-			}
-		}
-	}()
+	// go func() {
+	// 	for {
+	// 		if Strategy != "NORMAL" {
+	// 			time.Sleep(1 * time.Minute)
+	// 			ScaleUp()
+	// 		}
+	// 	}
+	// }()
 	go func() {
 		for {
 			Total := len(CurrentAddressTable) + len(ReadyAddressTable) + len(ZombieAddressTable)
@@ -399,6 +399,7 @@ func PingReq() {
 						fmt.Println("before make http.Post")
 						_, err = http.Post("http://"+GetMyIP()+":7000/modifyHost", "application/json", bytes.NewBuffer(address))
 						fmt.Println("after make http.Post")
+						fmt.Println("Delete Current and Send Ready")
 						if err != nil {
 							logFile := OpenLogFile("Error")
 							WriteLog(logFile, "error,"+err.Error())
@@ -424,7 +425,9 @@ func PingReq() {
 						WriteLog(logFile, "error,"+err.Error())
 						defer logFile.Close()
 					}
+					fmt.Printf("%s's Memory usage: %d\n", NodeNameTable[NodeAddress], MemoryUsage)
 					if MemoryUsage >= Threshold {
+						fmt.Println("Current to Zombie")
 						if Strategy == "NORMAL" {
 							ChangeStrategy()
 						}
@@ -481,6 +484,7 @@ func PingReq() {
 						defer logFile.Close()
 					}
 					if MemoryUsage <= 20 {
+						fmt.Println("Zombie to Ready")
 						ReadyAddressTable[Node] = NodeAddress
 						delete(ZombieAddressTable, Node)
 					}
@@ -547,24 +551,26 @@ func RegNewNode(w http.ResponseWriter, req *http.Request) {
 	}
 	TCPConnection(addr.Address, fmt.Sprint(port+100))
 	if addr.Type == "1" && Strategy == "NORMAL" {
-		if len(CurrentAddressTable) <= 4 {
+		if len(CurrentAddressTable) <= 3 {
+			fmt.Println("Current")
 			CurrentAddressTable[addr.NewNode] = addr.Address + ":" + addr.NewNode
+			fmt.Println(CurrentAddressTable)
 			NodeNameTable[addr.Address+":"+addr.NewNode] = addr.NodeName
 		} else {
+			fmt.Println("Ready")
 			ReadyAddressTable[addr.NewNode] = addr.Address + ":" + addr.NewNode
 			NodeNameTable[addr.Address+":"+addr.NewNode] = addr.NodeName
 		}
 	} else if addr.Type == "2" {
+		fmt.Println("Zombie")
 		ZombieAddressTable[addr.NewNode] = addr.Address + ":" + addr.NewNode
 		NodeNameTable[addr.Address+":"+addr.NewNode] = addr.NodeName
 	} else if addr.Type == "1" && Strategy == "ABNORMAL" {
+		fmt.Println("RegNewNode when Strategy is ABNORMAL")
 		CurrentAddressTable[addr.NewNode] = addr.Address + ":" + addr.NewNode
 		NodeNameTable[addr.Address+":"+addr.NewNode] = addr.NodeName
-		Data, _ := json.Marshal(CurrentAddressTable[addr.NewNode])
+		Data, _ := json.Marshal(CurrentAddressTable)
 		http.Post("http://"+GetMyIP()+":7000/UpdateHost", "application/json", bytes.NewBuffer(Data))
-	} else {
-		ZombieAddressTable[addr.NewNode] = addr.Address + ":" + addr.NewNode
-		NodeNameTable[addr.Address+":"+addr.NewNode] = addr.NodeName
 	}
 	if len(CurrentAddressTable) >= 4 && OneTime == 0 {
 		Data, err := json.Marshal(CurrentAddressTable)
@@ -652,6 +658,7 @@ func CheckZombie() {
 		}
 	}
 	if result == 0 {
+		fmt.Println("Change the Strategy Since there was no Zombie node for 5 mins")
 		Strategy = "NORMAL"
 		// logFile := OpenLogFile("General")
 		// WriteLog(logFile, "starttime,"+Boot.Format("2006-01-02 15:04:05")+","+"name,Atena,"+"power,on,"+"strategy,"+Strategy+","+"enlapsedTime,"+time.Since(Boot).String())
@@ -681,14 +688,13 @@ func ScaleUp() {
 		for K, V := range ReadyAddressTable {
 			CurrentAddressTable[K] = V
 		}
-
 		data, err := json.Marshal(CurrentAddressTable)
 		if err != nil {
 			logFile := OpenLogFile("Error")
 			WriteLog(logFile, "error,"+err.Error())
 			defer logFile.Close()
 		}
-		http.Post("http://"+GetMyIP()+"/UpdateHost", "application/json", bytes.NewBuffer(data))
+		http.Post("http://"+GetMyIP()+":7000/UpdateHost", "application/json", bytes.NewBuffer(data))
 		SUT = time.Since(start).String()
 		for k := range ReadyAddressTable {
 			delete(ReadyAddressTable, k)

@@ -22,7 +22,8 @@ func SwtichStrategy(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Strategy", Strategy)
 	}
 	if data.Data == "1" {
-		// ChangeStrategy()
+		ChangeStrategy()
+		ScaleUp()
 		fmt.Println("ChangeStrategy")
 	}
 

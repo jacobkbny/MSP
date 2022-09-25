@@ -107,7 +107,7 @@ func Server() {
 	CurrentAddressTable = make(map[string]string)
 	ReadyAddressTable = make(map[string]string)
 	ZombieAddressTable = make(map[string]string)
-	ipBlackList = make([]string, 10)
+	ipBlackList = make([]string, 0)
 	NodeNameTable = make(map[string]string)
 	Client = make(map[string]net.Conn)
 	// PbftHostAddressTable = make(map[string]string)
@@ -178,7 +178,7 @@ func Server() {
 		for {
 			//Check if the attack is over by checking the length of ZombieAddressTable for 5 min
 			if Strategy != "NORMAL" {
-				// CheckLazyBoyHost()
+				//CheckLazyBoyHost()
 				CheckZombie()
 				// WriteLog("strategy:" + Strategy + "\n")
 				// logFile := OpenLogFile("General")
@@ -208,7 +208,6 @@ func Server() {
 	defer CloseConnection(Client)
 
 }
-
 func LoadConfig() (ConfigData, error) {
 	temp := new(ConfigData)
 	file, err := os.Open("config.json")
@@ -430,6 +429,20 @@ func PingReq() {
 						fmt.Println("Current to Zombie")
 						if Strategy == "NORMAL" {
 							ChangeStrategy()
+						}
+						for _, V := range ReadyAddressTable {
+							NewNode := map[string]string{
+								"newIp":    V,
+								"zombieIp": NodeAddress,
+							}
+							Data, err := json.Marshal(NewNode)
+							_, err = http.Post("http://"+GetMyIP()+":7000/modifyHost", "application/json", bytes.NewBuffer(Data))
+							if err != nil {
+								logFile := OpenLogFile("Error")
+								WriteLog(logFile, "error,"+err.Error())
+								defer logFile.Close()
+							}
+							break
 						}
 						delete(CurrentAddressTable, Node)
 						ZombieAddressTable[Node] = NodeAddress

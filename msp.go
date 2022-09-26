@@ -414,15 +414,16 @@ func PingReq() {
 			} else {
 				// n, err := Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
 				response, err := bufio.NewReader(Client[temp[0]+":"+fmt.Sprint(port+100)]).ReadString('\n')
+				temp := response[1 : len(response)-2]
 				if err != nil {
 					logFile := OpenLogFile("Error")
 					WriteLog(logFile, "error,"+err.Error())
 					defer logFile.Close()
 				}
-				// Memory := string(Data[:n-2])
-				fmt.Println("CPU:", response)
+				// Memory := string(Data[1 : n-2])
+				fmt.Println("CPU:", temp)
 				if response != "" {
-					MemoryUsage, err := strconv.Atoi(response)
+					MemoryUsage, err := strconv.Atoi(temp)
 					if err != nil {
 						logFile := OpenLogFile("Error")
 						WriteLog(logFile, "error,"+err.Error())

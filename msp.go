@@ -169,9 +169,9 @@ func Server() {
 	// Check who is working as a host in the GateWay
 	go func() {
 		for {
-			if len(CurrentAddressTable) > 4 {
-				// time.Sleep(1 * time.Minute)
+			if len(CurrentAddressTable) >= 4 {
 				WriteHosts()
+				time.Sleep(1 * time.Minute)
 			}
 		}
 	}()

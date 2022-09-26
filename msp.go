@@ -598,11 +598,11 @@ func RegNewNode(w http.ResponseWriter, req *http.Request) {
 			defer logFile.Close()
 		}
 		http.Post("http://"+GetMyIP()+":7000/UpdateHost", "application/json", bytes.NewBuffer(Data))
-		for _, address := range CurrentAddressTable {
-			logFile := OpenLogFile("Hosts")
-			WriteLog(logFile, NodeNameTable[address]+","+address)
-			defer logFile.Close()
-		}
+		// for _, address := range CurrentAddressTable {
+		// 	logFile := OpenLogFile("Hosts")
+		// 	WriteLog(logFile, NodeNameTable[address]+","+address)
+		// 	defer logFile.Close()
+		// }
 		OneTime++
 	}
 
@@ -621,9 +621,6 @@ func RegNewNode(w http.ResponseWriter, req *http.Request) {
 //		}
 //		WriteLog("Hosts:" + Hosts[0] + Hosts[1] + Hosts[2])
 //	}
-type Article struct {
-	Hosts []string
-}
 
 func CheckHost() {
 	if len(CurrentAddressTable) >= 4 {
@@ -631,15 +628,31 @@ func CheckHost() {
 		for _, V := range CurrentAddressTable {
 			temp = append(temp, V)
 		}
-		data := make([]Article, 1)
-		data[0].Hosts = temp
-		logFile := OpenLogFile("Hosts")
+
+		var AllHostAddress string
+		// logFile := OpenLogFile("Hosts")
 		for i := 0; i < len(temp); i++ {
-			WriteLog(logFile, NodeNameTable[temp[i]]+","+temp[i])
-			log.Println("hosts:")
-			log.Println(temp[i] + ",")
-			defer logFile.Close()
+			// WriteLog(logFile, NodeNameTable[temp[i]]+","+temp[i])
+			// log.Println("hosts:")
+			// log.Println(temp[i] + ",")
+			// defer logFile.Close()
+			if i <= len(temp)-2 {
+				AllHostAddress += temp[i] + "-"
+			} else {
+				AllHostAddress += temp[i]
+			}
 		}
+		var AllHostName string
+		for i := 0; i < len(temp); i++ {
+			if 1 <= len(temp)-2 {
+				AllHostName += NodeNameTable[temp[i]] + "-"
+			} else {
+				AllHostName += NodeNameTable[temp[i]]
+			}
+		}
+		logFile := OpenLogFile("Hosts")
+		WriteLog(logFile, "HostNames,"+AllHostName+","+"HostAddressTable,"+AllHostAddress)
+		defer logFile.Close()
 	}
 }
 func ChangeStrategy() {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/sha256"
 	"database/sql"
@@ -366,8 +367,8 @@ func TableUpdateAlarm() {
 }
 func PingReq() {
 	for Node, NodeAddress := range CurrentAddressTable {
-		var Data []byte
-		Data = make([]byte, 4096)
+		// var Data []byte
+		// Data = make([]byte, 0)
 		temp := strings.Split(NodeAddress, ":")
 		port, err := strconv.Atoi(temp[1])
 		if Client[temp[0]+":"+fmt.Sprint(port+100)] != nil {
@@ -411,16 +412,17 @@ func PingReq() {
 					}
 				}
 			} else {
-				_, err = Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
+				// n, err := Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
+				response, err := bufio.NewReader(Client[temp[0]+":"+fmt.Sprint(port+100)]).ReadString('\n')
 				if err != nil {
 					logFile := OpenLogFile("Error")
 					WriteLog(logFile, "error,"+err.Error())
 					defer logFile.Close()
 				}
-				Memory := string(Data[:])
-				fmt.Println("CPU:", Memory)
-				if Memory != "" {
-					MemoryUsage, err := strconv.Atoi(Memory)
+				// Memory := string(Data[:n-2])
+				fmt.Println("CPU:", response)
+				if response != "" {
+					MemoryUsage, err := strconv.Atoi(response)
 					if err != nil {
 						logFile := OpenLogFile("Error")
 						WriteLog(logFile, "error,"+err.Error())

@@ -19,6 +19,7 @@ type HostInfoJSON struct {
 	Systemname      string
 	Hostinformation []HostInfo
 	Timestamp       string
+	Type            string
 }
 
 func jsonTest() {
@@ -43,7 +44,8 @@ func jsonTest() {
 	hostinfo := &HostInfoJSON{
 		Systemname:      "system",
 		Hostinformation: hostinfos,
-		Timestamp:       "YYYY-MM-DD",
+		Timestamp:       time.Now().Format("2006-01-02 15:04:05"),
+		Type:            "Current",
 	}
 	byteData, _ := json.Marshal(hostinfo)
 	// fmt.Println(string(byteData))
@@ -54,4 +56,5 @@ func jsonTest() {
 	}
 	logFile.Write(byteData)
 	defer logFile.Close()
+
 }

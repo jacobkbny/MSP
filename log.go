@@ -44,7 +44,6 @@ func OpenLogFile(fileName string) *os.File {
 // Write log
 func WriteLog(logFile *os.File, logData string) {
 	//log.SetOutput(logFile)
-
 	logger := log.New(logFile, "", 0)
 	// logger := log.New(logFile, "", log.Ldate|log.Ltime)
 	if logData != "," && logData != "[" {

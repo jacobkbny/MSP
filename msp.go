@@ -73,7 +73,7 @@ var ZombieAddressTable map[string]string
 // var PbftReadyAddressTable map[string]string
 var StatusOfAll []*Status
 var MyPort string
-var Threshold int
+var Threshold float64
 var Revive int
 var ipBlackList []string
 var config ConfigData
@@ -93,7 +93,7 @@ func init() {
 		fmt.Println(err)
 	}
 	config = temp
-	num, err := strconv.Atoi(config.Threshold)
+	num, err := strconv.ParseFloat(config.Threshold, 64)
 	digit, err := strconv.Atoi(config.Revive)
 	Threshold = num
 	Revive = digit
@@ -115,7 +115,7 @@ func Server() {
 	Handlers()
 	// OpenLogFile()
 	logFile := OpenLogFile("General")
-	WriteLog(logFile, "starttime,"+Boot.Format("2006-01-02 15:04:05")+","+"name,Atena,"+"power,on,"+"strategy,"+Strategy+","+"enlapsedTime,"+time.Since(Boot).String())
+	WriteLog(logFile, "logging,General log,system-name,MSP"+"starttime,"+Boot.Format("2006-01-02 15:04:05")+","+"name,Atena,"+"power,on,"+"strategy,"+Strategy+","+"enlapsedTime,"+time.Since(Boot).String())
 	logFile.Close()
 	// go func() {
 	// 	for {
@@ -136,7 +136,7 @@ func Server() {
 				Haza := fmt.Sprint((ZombieLen / Total) * 100.0)
 				Hazardeous := strings.Split(Haza, ".")
 				logFile := OpenLogFile("Performance")
-				WriteLog(logFile, "pps,"+PPS[0]+",sut,"+SUT+",hazardeous,"+Hazardeous[0]+",totalNode,"+fmt.Sprint(Total))
+				WriteLog(logFile, "ppn,"+PPS[0]+",sut,"+SUT+",hazardeous,"+Hazardeous[0]+",totalNode,"+fmt.Sprint(Total))
 				defer logFile.Close()
 			}
 		}
@@ -231,7 +231,7 @@ func CheckConfig() {
 	if tempHash != Hash {
 		config = temp
 		Hash = tempHash
-		num, err := strconv.Atoi(config.Threshold)
+		num, err := strconv.ParseFloat(config.Threshold, 64)
 		if err != nil {
 			// WriteLog("error: " + err.Error() + "\n")
 			logFile := OpenLogFile("Error")
@@ -366,7 +366,8 @@ func TableUpdateAlarm() {
 }
 func PingReq() {
 	for Node, NodeAddress := range CurrentAddressTable {
-		Data := []byte{}
+		var Data []byte
+		Data = make([]byte, 4096)
 		temp := strings.Split(NodeAddress, ":")
 		port, err := strconv.Atoi(temp[1])
 		if Client[temp[0]+":"+fmt.Sprint(port+100)] != nil {
@@ -417,14 +418,15 @@ func PingReq() {
 					defer logFile.Close()
 				}
 				Memory := string(Data[:])
+				fmt.Println("CPU:", Memory)
 				if Memory != "" {
-					MemoryUsage, err := strconv.Atoi(Memory)
+					MemoryUsage, err := strconv.ParseFloat(Memory, 64)
 					if err != nil {
 						logFile := OpenLogFile("Error")
 						WriteLog(logFile, "error,"+err.Error())
 						defer logFile.Close()
 					}
-					fmt.Printf("%s's Memory usage: %d\n", NodeNameTable[NodeAddress], MemoryUsage)
+					fmt.Printf("%s's Memory usage: %f\n", NodeNameTable[NodeAddress], MemoryUsage)
 					if MemoryUsage >= Threshold {
 						fmt.Println("Current to Zombie")
 						if Strategy == "NORMAL" {
@@ -616,15 +618,23 @@ func RegNewNode(w http.ResponseWriter, req *http.Request) {
 //		}
 //		WriteLog("Hosts:" + Hosts[0] + Hosts[1] + Hosts[2])
 //	}
+type Article struct {
+	Hosts []string
+}
+
 func CheckHost() {
 	if len(CurrentAddressTable) >= 4 {
 		var temp []string
 		for _, V := range CurrentAddressTable {
 			temp = append(temp, V)
 		}
+		data := make([]Article, 1)
+		data[0].Hosts = temp
+		logFile := OpenLogFile("Hosts")
 		for i := 0; i < len(temp); i++ {
-			logFile := OpenLogFile("Hosts")
 			WriteLog(logFile, NodeNameTable[temp[i]]+","+temp[i])
+			log.Println("hosts:")
+			log.Println(temp[i] + ",")
 			defer logFile.Close()
 		}
 	}

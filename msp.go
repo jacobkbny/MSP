@@ -74,7 +74,7 @@ var ZombieAddressTable map[string]string
 // var PbftReadyAddressTable map[string]string
 var StatusOfAll []*Status
 var MyPort string
-var Threshold int
+var Threshold float64
 var Revive int
 var ipBlackList []string
 var config ConfigData
@@ -94,7 +94,7 @@ func init() {
 		fmt.Println(err)
 	}
 	config = temp
-	num, err := strconv.Atoi(config.Threshold)
+	num, err := strconv.ParseFloat(config.Threshold, 32)
 	digit, err := strconv.Atoi(config.Revive)
 	Threshold = num
 	Revive = digit
@@ -232,7 +232,7 @@ func CheckConfig() {
 	if tempHash != Hash {
 		config = temp
 		Hash = tempHash
-		num, err := strconv.Atoi(config.Threshold)
+		num, err := strconv.ParseFloat(config.Threshold, 32)
 		if err != nil {
 			// WriteLog("error: " + err.Error() + "\n")
 			logFile := OpenLogFile("Error")
@@ -423,13 +423,13 @@ func PingReq() {
 				// Memory := string(Data[1 : n-2])
 				fmt.Println("CPU:", temp)
 				if response != "" {
-					MemoryUsage, err := strconv.Atoi(temp)
+					MemoryUsage, err := strconv.ParseFloat(temp, 32)
 					if err != nil {
 						logFile := OpenLogFile("Error")
 						WriteLog(logFile, "error,"+err.Error())
 						defer logFile.Close()
 					}
-					fmt.Printf("%s's Memory usage: %d\n", NodeNameTable[NodeAddress], MemoryUsage)
+					fmt.Printf("%s's Memory usage: %f\n", NodeNameTable[NodeAddress], MemoryUsage)
 					if MemoryUsage >= Threshold {
 						fmt.Println("Current to Zombie")
 						if Strategy == "NORMAL" {

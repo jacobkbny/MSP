@@ -169,9 +169,9 @@ func Server() {
 	// Check who is working as a host in the GateWay
 	go func() {
 		for {
-			if len(CurrentAddressTable) > 0 {
-				time.Sleep(1 * time.Minute)
-				CheckHost()
+			if len(CurrentAddressTable) > 4 {
+				// time.Sleep(1 * time.Minute)
+				WriteHosts()
 			}
 		}
 	}()
@@ -389,17 +389,14 @@ func PingReq() {
 							"newIp":    V,
 							"zombieIp": NodeAddress,
 						}
-						fmt.Println("Made NewNode")
 						address, err := json.Marshal(NewNode)
-						fmt.Println("Marshaled NewNode")
 						if err != nil {
 							logFile := OpenLogFile("Error")
 							WriteLog(logFile, "error,"+err.Error())
 							defer logFile.Close()
 						}
-						fmt.Println("before make http.Post")
 						_, err = http.Post("http://"+GetMyIP()+":7000/modifyHost", "application/json", bytes.NewBuffer(address))
-						fmt.Println("after make http.Post")
+
 						fmt.Println("Delete Current and Send Ready")
 						if err != nil {
 							logFile := OpenLogFile("Error")
@@ -414,15 +411,15 @@ func PingReq() {
 			} else {
 				// n, err := Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
 				response, err := bufio.NewReader(Client[temp[0]+":"+fmt.Sprint(port+100)]).ReadString('\n')
-				temp := response[1 : len(response)-2]
-				if err != nil {
-					logFile := OpenLogFile("Error")
-					WriteLog(logFile, "error,"+err.Error())
-					defer logFile.Close()
-				}
-				// Memory := string(Data[1 : n-2])
-				fmt.Println("CPU:", temp)
 				if response != "" {
+					temp := response[1 : len(response)-2]
+					if err != nil {
+						logFile := OpenLogFile("Error")
+						WriteLog(logFile, "error,"+err.Error())
+						defer logFile.Close()
+					}
+					// Memory := string(Data[1 : n-2])
+					fmt.Println("CPU:", temp)
 					MemoryUsage, err := strconv.ParseFloat(temp, 32)
 					if err != nil {
 						logFile := OpenLogFile("Error")
@@ -452,6 +449,7 @@ func PingReq() {
 						delete(CurrentAddressTable, Node)
 						ZombieAddressTable[Node] = NodeAddress
 					}
+
 				}
 			}
 		}
@@ -644,7 +642,7 @@ func CheckHost() {
 		}
 		var AllHostName string
 		for i := 0; i < len(temp); i++ {
-			if 1 <= len(temp)-2 {
+			if i <= len(temp)-2 {
 				AllHostName += NodeNameTable[temp[i]] + "-"
 			} else {
 				AllHostName += NodeNameTable[temp[i]]

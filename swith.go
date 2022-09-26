@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -21,25 +20,11 @@ func SwtichStrategy(w http.ResponseWriter, r *http.Request) {
 	if data.Data == "0" {
 		Strategy = "NORMAL"
 		fmt.Println("Strategy", Strategy)
-		var tempAddress map[string]string
-		tempAddress = make(map[string]string)
-		for V, K := range CurrentAddressTable {
-			if len(tempAddress) <= 3 {
-				tempAddress[V] = K
-				break
-			}
-		}
-		Data, _ := json.Marshal(tempAddress)
-		_, err = http.Post("http://localhost:7000/UpdateHost", "application/json", bytes.NewBuffer(Data))
-		if err != nil {
-			logFile := OpenLogFile("Error")
-			WriteLog(logFile, "errormsg,"+err.Error())
-		}
+		ChangeToNormal()
 	}
 	if data.Data == "1" {
 		ChangeStrategy()
 		ScaleUp()
 		fmt.Println("ChangeStrategy")
 	}
-
 }

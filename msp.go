@@ -75,7 +75,7 @@ var ZombieAddressTable map[string]string
 var StatusOfAll []*Status
 var MyPort string
 var Threshold float64
-var Revive int
+var Revive float64
 var ipBlackList []string
 var config ConfigData
 var Hash [32]byte
@@ -95,7 +95,7 @@ func init() {
 	}
 	config = temp
 	num, err := strconv.ParseFloat(config.Threshold, 32)
-	digit, err := strconv.Atoi(config.Revive)
+	digit, err := strconv.ParseFloat(config.Revive, 32)
 	Threshold = num
 	Revive = digit
 	Hash = MakeHashofConfig(config)
@@ -190,7 +190,7 @@ func Server() {
 	// put the Node in Ready to Current when strategy is not 'NORMAL'
 	// go func() {
 	// 	for {
-	// 		if Strategy != "NORMAL" {
+	// 		if Strategy != "NORMAL" && len(ReadyAddressTable) >0 {
 	// 			time.Sleep(1 * time.Minute)
 	// 			ScaleUp()
 	// 		}
@@ -239,7 +239,7 @@ func CheckConfig() {
 			WriteLog(logFile, "error,"+err.Error())
 			logFile.Close()
 		}
-		digit, err := strconv.Atoi(config.Revive)
+		digit, err := strconv.ParseFloat(config.Revive, 32)
 		if err != nil {
 			logFile := OpenLogFile("Error")
 			WriteLog(logFile, "error,"+err.Error())
@@ -396,7 +396,6 @@ func PingReq() {
 							defer logFile.Close()
 						}
 						_, err = http.Post("http://"+GetMyIP()+":7000/modifyHost", "application/json", bytes.NewBuffer(address))
-
 						fmt.Println("Delete Current and Send Ready")
 						if err != nil {
 							logFile := OpenLogFile("Error")
@@ -405,11 +404,11 @@ func PingReq() {
 						}
 						CurrentAddressTable[K] = V
 						delete(ReadyAddressTable, K)
+						WriteHosts()
 						break
 					}
 				}
 			} else {
-				// n, err := Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
 				response, err := bufio.NewReader(Client[temp[0]+":"+fmt.Sprint(port+100)]).ReadString('\n')
 				if response != "" {
 					temp := response[1 : len(response)-2]
@@ -448,6 +447,7 @@ func PingReq() {
 						}
 						delete(CurrentAddressTable, Node)
 						ZombieAddressTable[Node] = NodeAddress
+						WriteHosts()
 					}
 
 				}
@@ -479,30 +479,32 @@ func PingReq() {
 		}
 	}
 	for Node, NodeAddress := range ZombieAddressTable {
-		var Data []byte
 		temp := strings.Split(NodeAddress, ":")
 		port, err := strconv.Atoi(temp[1])
 		if Client[temp[0]+":"+fmt.Sprint(port+100)] != nil {
 			err = json.NewEncoder(Client[temp[0]+":"+fmt.Sprint(port+100)]).Encode("Zombie")
 			if err == nil {
-				_, err = Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
-				if err != nil {
-					logFile := OpenLogFile("Disconnection")
-					WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"2")
-					defer logFile.Close()
-				}
-				Memory := string(Data)
-				if Memory != "" {
-					MemoryUsage, err := strconv.Atoi(Memory)
+				response, err := bufio.NewReader(Client[temp[0]+":"+fmt.Sprint(port+100)]).ReadString('\n')
+				if response != "" {
+					temp := response[1 : len(response)-2]
 					if err != nil {
 						logFile := OpenLogFile("Error")
 						WriteLog(logFile, "error,"+err.Error())
 						defer logFile.Close()
 					}
-					if MemoryUsage <= 20 {
+					// Memory := string(Data[1 : n-2])
+					fmt.Println("CPU:", temp)
+					MemoryUsage, err := strconv.ParseFloat(temp, 32)
+					if err != nil {
+						logFile := OpenLogFile("Error")
+						WriteLog(logFile, "error,"+err.Error())
+						defer logFile.Close()
+					}
+					if MemoryUsage <= Revive {
 						fmt.Println("Zombie to Ready")
-						ReadyAddressTable[Node] = NodeAddress
 						delete(ZombieAddressTable, Node)
+						ReadyAddressTable[Node] = NodeAddress
+						ScaleUp()
 					}
 				}
 			}
@@ -587,6 +589,7 @@ func RegNewNode(w http.ResponseWriter, req *http.Request) {
 		NodeNameTable[addr.Address+":"+addr.NewNode] = addr.NodeName
 		Data, _ := json.Marshal(CurrentAddressTable)
 		http.Post("http://"+GetMyIP()+":7000/UpdateHost", "application/json", bytes.NewBuffer(Data))
+		WriteHosts()
 	}
 	if len(CurrentAddressTable) >= 4 && OneTime == 0 {
 		Data, err := json.Marshal(CurrentAddressTable)
@@ -596,11 +599,7 @@ func RegNewNode(w http.ResponseWriter, req *http.Request) {
 			defer logFile.Close()
 		}
 		http.Post("http://"+GetMyIP()+":7000/UpdateHost", "application/json", bytes.NewBuffer(Data))
-		// for _, address := range CurrentAddressTable {
-		// 	logFile := OpenLogFile("Hosts")
-		// 	WriteLog(logFile, NodeNameTable[address]+","+address)
-		// 	defer logFile.Close()
-		// }
+		WriteHosts()
 		OneTime++
 	}
 
@@ -653,8 +652,35 @@ func CheckHost() {
 		defer logFile.Close()
 	}
 }
+func ChangeToNormal() {
+	for K, V := range CurrentAddressTable {
+		if len(ReadyAddressTable) <= 7 {
+			ReadyAddressTable[K] = V
+		} else {
+			Data, err := json.Marshal(ReadyAddressTable)
+			if err != nil {
+				logFile := OpenLogFile("Error")
+				WriteLog(logFile, "errmsg,"+err.Error())
+				defer logFile.Close()
+			}
+			_, err = http.Post("http://"+GetMyIP()+":7000/UpdateHost", "application/json", bytes.NewBuffer(Data))
+			if err != nil {
+				logFile := OpenLogFile("Error")
+				WriteLog(logFile, "errmsg,"+err.Error())
+				defer logFile.Close()
+			}
+			WriteHosts()
+		}
+	}
+
+}
 func ChangeStrategy() {
-	Strategy = "ABNORMAL"
+	if Strategy == "NORMAL" {
+		Strategy = "ABNORMAL"
+	} else {
+		Strategy = "NORMAL"
+		ChangeToNormal()
+	}
 	Data, err := json.Marshal(Strategy)
 	if err != nil {
 		logFile := OpenLogFile("Error")
@@ -697,9 +723,7 @@ func CheckZombie() {
 	if result == 0 {
 		fmt.Println("Change the Strategy Since there was no Zombie node for 5 mins")
 		Strategy = "NORMAL"
-		// logFile := OpenLogFile("General")
-		// WriteLog(logFile, "starttime,"+Boot.Format("2006-01-02 15:04:05")+","+"name,Atena,"+"power,on,"+"strategy,"+Strategy+","+"enlapsedTime,"+time.Since(Boot).String())
-		// defer logFile.Close()
+		ChangeToNormal()
 		Data, _ := json.Marshal(Strategy)
 		for _, V := range CurrentAddressTable {
 			_, err := http.Post("http://"+V+"/ChangeStrategy", "application/json", bytes.NewBuffer(Data))
@@ -736,6 +760,7 @@ func ScaleUp() {
 		for k := range ReadyAddressTable {
 			delete(ReadyAddressTable, k)
 		}
+		WriteHosts()
 	}
 }
 

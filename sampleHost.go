@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"time"
 )
@@ -47,11 +46,12 @@ func jsonTest() {
 		Timestamp:       "YYYY-MM-DD",
 	}
 	byteData, _ := json.Marshal(hostinfo)
-	fmt.Println(string(byteData))
-	logFile, err := os.OpenFile(time.Now().Format("2006-01-02")+"-Hosts.json", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	// fmt.Println(string(byteData))
+	logFolderPath := "./log"
+	logFile, err := os.OpenFile(logFolderPath+"/"+time.Now().Format("2006-01-02")+"-Hosts.txt", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		fmt.Println(err)
 	}
-	log.Println(byteData)
+	logFile.Write(byteData)
 	defer logFile.Close()
 }

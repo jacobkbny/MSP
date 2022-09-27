@@ -200,11 +200,12 @@ func Server() {
 		for {
 			Total := len(CurrentAddressTable) + len(ReadyAddressTable) + len(ZombieAddressTable)
 			if Total > 0 {
-				time.Sleep(3 * time.Second)
+				time.Sleep(500 * time.Millisecond)
 				PingReq()
 			}
 		}
 	}()
+
 	log.Fatal(http.ListenAndServe(":"+config.Port, nil))
 	defer CloseConnection(Client)
 
@@ -236,20 +237,20 @@ func CheckConfig() {
 		if err != nil {
 			// WriteLog("error: " + err.Error() + "\n")
 			logFile := OpenLogFile("Error")
-			WriteLog(logFile, "error,"+err.Error())
+			WriteLog(logFile, "logging,error log,system-name,MSP,errmsg,"+"ParseError")
 			logFile.Close()
 		}
 		digit, err := strconv.ParseFloat(config.Revive, 32)
 		if err != nil {
 			logFile := OpenLogFile("Error")
-			WriteLog(logFile, "error,"+err.Error())
+			WriteLog(logFile, "logging,error log,system-name,MSP,errmsg,"+"ParseError")
 			logFile.Close()
 		}
 		Threshold = num
 		Revive = digit
 		// WriteLog("Threshold:" + fmt.Sprint(Threshold) + "\n")
 		logFile := OpenLogFile("Changes")
-		WriteLog(logFile, "threshold,"+fmt.Sprint(Threshold)+",revive,"+fmt.Sprint(Revive))
+		WriteLog(logFile, "logging,changes log,system-name,MSP,"+"threshold,"+fmt.Sprint(Threshold)+",revive,"+fmt.Sprint(Revive))
 		defer logFile.Close()
 	}
 }
@@ -376,7 +377,7 @@ func PingReq() {
 			// if err exist
 			if err != nil {
 				logFile := OpenLogFile("Disconnection")
-				WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"1")
+				WriteLog(logFile, "logging,disconnection log,system-name,MSP,node-name,"+NodeNameTable[NodeAddress]+",type,1")
 				defer logFile.Close()
 				Client[temp[0]+":"+fmt.Sprint(port+100)].Close()
 				delete(CurrentAddressTable, Node)
@@ -392,14 +393,14 @@ func PingReq() {
 						address, err := json.Marshal(NewNode)
 						if err != nil {
 							logFile := OpenLogFile("Error")
-							WriteLog(logFile, "error,"+err.Error())
+							WriteLog(logFile, "logging,error log,system-name,MSP,errmsg,"+"ParseError")
 							defer logFile.Close()
 						}
 						_, err = http.Post("http://"+GetMyIP()+":7000/modifyHost", "application/json", bytes.NewBuffer(address))
 						fmt.Println("Delete Current and Send Ready")
 						if err != nil {
 							logFile := OpenLogFile("Error")
-							WriteLog(logFile, "error,"+err.Error())
+							WriteLog(logFile, "logging,error log,system-name,MSP,errmsg,"+"Connection error")
 							defer logFile.Close()
 						}
 						CurrentAddressTable[K] = V
@@ -414,7 +415,7 @@ func PingReq() {
 					temp := response[1 : len(response)-2]
 					if err != nil {
 						logFile := OpenLogFile("Error")
-						WriteLog(logFile, "error,"+err.Error())
+						WriteLog(logFile, "logging,error log,system-name,MSP,errmsg,"+"Connection error")
 						defer logFile.Close()
 					}
 					// Memory := string(Data[1 : n-2])
@@ -422,7 +423,7 @@ func PingReq() {
 					MemoryUsage, err := strconv.ParseFloat(temp, 32)
 					if err != nil {
 						logFile := OpenLogFile("Error")
-						WriteLog(logFile, "error,"+err.Error())
+						WriteLog(logFile, "logging,error log,system-name,MSP,errmsg,"+"ParseError")
 						defer logFile.Close()
 					}
 					fmt.Printf("%s's Memory usage: %f\n", NodeNameTable[NodeAddress], MemoryUsage)
@@ -440,7 +441,7 @@ func PingReq() {
 							_, err = http.Post("http://"+GetMyIP()+":7000/modifyHost", "application/json", bytes.NewBuffer(Data))
 							if err != nil {
 								logFile := OpenLogFile("Error")
-								WriteLog(logFile, "error,"+err.Error())
+								WriteLog(logFile, "logging,error log,system-name,MSP,errmsg,"+"Connection error")
 								defer logFile.Close()
 							}
 							break
@@ -464,12 +465,12 @@ func PingReq() {
 				_, err = Client[temp[0]+":"+fmt.Sprint(port+100)].Read(Data)
 				if err != nil {
 					logFile := OpenLogFile("Disconnection")
-					WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"1")
+					WriteLog(logFile, "logging,disconnection log,system-name,MSP,node-name,"+NodeNameTable[NodeAddress]+",type,1")
 					defer logFile.Close()
 				}
 			} else {
 				logFile := OpenLogFile("Disconnection")
-				WriteLog(logFile, "disconnected,"+NodeAddress+","+"type,"+"1")
+				WriteLog(logFile, "logging,disconnection log,system-name,MSP,node-name,"+NodeNameTable[NodeAddress]+",type,1")
 				defer logFile.Close()
 				Client[temp[0]+":"+fmt.Sprint(port+100)].Close()
 				delete(ReadyAddressTable, Node)
@@ -489,7 +490,7 @@ func PingReq() {
 					temp := response[1 : len(response)-2]
 					if err != nil {
 						logFile := OpenLogFile("Error")
-						WriteLog(logFile, "error,"+err.Error())
+						WriteLog(logFile, "logging,error log,system-name,MSP,errmsg,"+"Connection error")
 						defer logFile.Close()
 					}
 					// Memory := string(Data[1 : n-2])
@@ -497,7 +498,7 @@ func PingReq() {
 					MemoryUsage, err := strconv.ParseFloat(temp, 32)
 					if err != nil {
 						logFile := OpenLogFile("Error")
-						WriteLog(logFile, "error,"+err.Error())
+						WriteLog(logFile, "logging,error log,system-name,MSP,errmsg,"+"Connection error")
 						defer logFile.Close()
 					}
 					if MemoryUsage <= Revive {
@@ -512,30 +513,32 @@ func PingReq() {
 	}
 }
 
-// if len(PbftHostAddressTable) > 0 {
-// 	for Node, NodeAddress := range PbftHostAddressTable {
-// 		_, err := http.Post("http://"+NodeAddress+"/PingReq", "text/plain", nil)
-// 		if err != nil {
-// 			logFile := OpenLogFile("Error")
-// 			WriteLog(logFile, "error,"+err.Error())
-// 			WriteLog(logFile, "pBFTDisconnected,"+NodeAddress+","+"type,"+"3")
-// 			defer logFile.Close()
-// 			delete(PbftHostAddressTable, Node)
-// 		}
-// 	}
+//	if len(PbftHostAddressTable) > 0 {
+//		for Node, NodeAddress := range PbftHostAddressTable {
+//			_, err := http.Post("http://"+NodeAddress+"/PingReq", "text/plain", nil)
+//			if err != nil {
+//				logFile := OpenLogFile("Error")
+//				WriteLog(logFile, "error,"+err.Error())
+//				WriteLog(logFile, "pBFTDisconnected,"+NodeAddress+","+"type,"+"3")
+//				defer logFile.Close()
+//				delete(PbftHostAddressTable, Node)
+//			}
+//		}
+//	}
+//
+//	for Node, NodeAddress := range PbftReadyAddressTable {
+//		_, err := http.Post("http://"+NodeAddress+"/PingReq", "text/plain", nil)
+//		if err != nil {
+//			logFile := OpenLogFile("Error")
+//			WriteLog(logFile, "error,"+err.Error())
+//			WriteLog(logFile, "pBFTDisconnected,"+NodeAddress+","+"type,"+"3")
+//			defer logFile.Close()
+//			delete(PbftReadyAddressTable, Node)
+//		}
+//	}
+//
 // }
-// for Node, NodeAddress := range PbftReadyAddressTable {
-// 	_, err := http.Post("http://"+NodeAddress+"/PingReq", "text/plain", nil)
-// 	if err != nil {
-// 		logFile := OpenLogFile("Error")
-// 		WriteLog(logFile, "error,"+err.Error())
-// 		WriteLog(logFile, "pBFTDisconnected,"+NodeAddress+","+"type,"+"3")
-// 		defer logFile.Close()
-// 		delete(PbftReadyAddressTable, Node)
-// 	}
-// }
-// }
-
+//
 //	func SendPingRes(StatusOfAll []*Status) {
 //		pid := os.Getpid()
 //		p, err := procfs.NewProc(pid)
@@ -557,14 +560,14 @@ func RegNewNode(w http.ResponseWriter, req *http.Request) {
 	addr := new(Addr)
 	json.NewDecoder(req.Body).Decode(addr)
 	logFile := OpenLogFile("NewNode")
-	WriteLog(logFile, "nodeName,"+addr.NodeName+",type,"+addr.Type+",address,"+addr.Address+":"+addr.NewNode)
+	WriteLog(logFile, "logging,newnode log,system-name,MSP,"+"nodeName,"+addr.NodeName+",type,"+addr.Type+",address,"+addr.Address+":"+addr.NewNode)
 	w.Header().Set("Content-Type", "application/json")
 	ipBlackList = append(ipBlackList, "abcd")
 	json.NewEncoder(w).Encode(ipBlackList)
 	port, err := strconv.Atoi(addr.NewNode)
 	if err != nil {
 		logFile := OpenLogFile("Error")
-		WriteLog(logFile, "error"+err.Error())
+		WriteLog(logFile, "logging,error log,system-name,MSP,errmsg,"+"Connection error")
 		defer logFile.Close()
 	}
 	TCPConnection(addr.Address, fmt.Sprint(port+100))
@@ -595,14 +598,13 @@ func RegNewNode(w http.ResponseWriter, req *http.Request) {
 		Data, err := json.Marshal(CurrentAddressTable)
 		if err != nil {
 			logFile := OpenLogFile("Error")
-			WriteLog(logFile, "error,"+err.Error())
+			WriteLog(logFile, "logging,error log,system-name,MSP,errmsg,"+"Connection error")
 			defer logFile.Close()
 		}
 		http.Post("http://"+GetMyIP()+":7000/UpdateHost", "application/json", bytes.NewBuffer(Data))
 		WriteHosts()
 		OneTime++
 	}
-
 }
 
 //	func InitialHosts() {
@@ -618,14 +620,12 @@ func RegNewNode(w http.ResponseWriter, req *http.Request) {
 //		}
 //		WriteLog("Hosts:" + Hosts[0] + Hosts[1] + Hosts[2])
 //	}
-
 func CheckHost() {
 	if len(CurrentAddressTable) >= 4 {
 		var temp []string
 		for _, V := range CurrentAddressTable {
 			temp = append(temp, V)
 		}
-
 		var AllHostAddress string
 		// logFile := OpenLogFile("Hosts")
 		for i := 0; i < len(temp); i++ {
@@ -656,17 +656,18 @@ func ChangeToNormal() {
 	for K, V := range CurrentAddressTable {
 		if len(ReadyAddressTable) <= 7 {
 			ReadyAddressTable[K] = V
+			delete(CurrentAddressTable, K)
 		} else {
-			Data, err := json.Marshal(ReadyAddressTable)
+			Data, err := json.Marshal(CurrentAddressTable)
 			if err != nil {
 				logFile := OpenLogFile("Error")
-				WriteLog(logFile, "errmsg,"+err.Error())
+				WriteLog(logFile, "logging,error log,system-name,MSP,errmsg,"+"ParseError")
 				defer logFile.Close()
 			}
 			_, err = http.Post("http://"+GetMyIP()+":7000/UpdateHost", "application/json", bytes.NewBuffer(Data))
 			if err != nil {
 				logFile := OpenLogFile("Error")
-				WriteLog(logFile, "errmsg,"+err.Error())
+				WriteLog(logFile, "logging,error log,system-name,MSP,errmsg,"+"ParseError")
 				defer logFile.Close()
 			}
 			WriteHosts()
@@ -677,6 +678,7 @@ func ChangeToNormal() {
 func ChangeStrategy() {
 	if Strategy == "NORMAL" {
 		Strategy = "ABNORMAL"
+		ScaleUp()
 	} else {
 		Strategy = "NORMAL"
 		ChangeToNormal()
@@ -684,14 +686,14 @@ func ChangeStrategy() {
 	Data, err := json.Marshal(Strategy)
 	if err != nil {
 		logFile := OpenLogFile("Error")
-		WriteLog(logFile, "error,"+err.Error())
+		WriteLog(logFile, "logging,error log,system-name,MSP,errmsg,"+"ParseError")
 		defer logFile.Close()
 	}
 	for _, V := range CurrentAddressTable {
 		_, err = http.Post("http://"+V+"/ChangeStrategy", "application/json", bytes.NewBuffer(Data))
 		if err != nil {
 			logFile := OpenLogFile("Error")
-			WriteLog(logFile, "error,"+err.Error())
+			WriteLog(logFile, "logging,error log,system-name,MSP,errmsg,"+"ConnectionError")
 			defer logFile.Close()
 		}
 	}
@@ -699,7 +701,7 @@ func ChangeStrategy() {
 		_, err = http.Post("http://"+V+"/ChangeStrategy", "application/json", bytes.NewBuffer(Data))
 		if err != nil {
 			logFile := OpenLogFile("Error")
-			WriteLog(logFile, "error,"+err.Error())
+			WriteLog(logFile, "logging,error log,system-name,MSP,errmsg,"+"ConnectionError")
 			defer logFile.Close()
 		}
 	}
@@ -707,7 +709,7 @@ func ChangeStrategy() {
 		_, err = http.Post("http://"+V+"/ChangeStrategy", "application/json", bytes.NewBuffer(Data))
 		if err != nil {
 			logFile := OpenLogFile("Error")
-			WriteLog(logFile, "error,"+err.Error())
+			WriteLog(logFile, "logging,error log,system-name,MSP,errmsg,"+"ConnectionError")
 			defer logFile.Close()
 		}
 	}
@@ -729,7 +731,7 @@ func CheckZombie() {
 			_, err := http.Post("http://"+V+"/ChangeStrategy", "application/json", bytes.NewBuffer(Data))
 			if err != nil {
 				logFile := OpenLogFile("Error")
-				WriteLog(logFile, "error,"+err.Error())
+				WriteLog(logFile, "logging,error log,system-name,MSP,errmsg,"+"ConnectionError")
 				defer logFile.Close()
 			}
 		}
@@ -737,7 +739,7 @@ func CheckZombie() {
 			_, err := http.Post("http://"+V+"/ChangeStrategy", "application/json", bytes.NewBuffer(Data))
 			if err != nil {
 				logFile := OpenLogFile("Error")
-				WriteLog(logFile, "error,"+err.Error())
+				WriteLog(logFile, "logging,error log,system-name,MSP,errmsg,"+"ConnectionError")
 				defer logFile.Close()
 			}
 		}
@@ -752,7 +754,7 @@ func ScaleUp() {
 		data, err := json.Marshal(CurrentAddressTable)
 		if err != nil {
 			logFile := OpenLogFile("Error")
-			WriteLog(logFile, "error,"+err.Error())
+			WriteLog(logFile, "logging,error log,system-name,MSP,errmsg,"+"ConnectionError")
 			defer logFile.Close()
 		}
 		http.Post("http://"+GetMyIP()+":7000/UpdateHost", "application/json", bytes.NewBuffer(data))

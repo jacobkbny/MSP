@@ -56,5 +56,4 @@ func jsonTest() {
 	}
 	logFile.Write(byteData)
 	defer logFile.Close()
-
 }

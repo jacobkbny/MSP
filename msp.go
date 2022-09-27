@@ -408,6 +408,8 @@ func PingReq() {
 						WriteHosts()
 						break
 					}
+				} else {
+					delete(CurrentAddressTable, Node)
 				}
 			} else {
 				response, err := bufio.NewReader(Client[temp[0]+":"+fmt.Sprint(port+100)]).ReadString('\n')
@@ -432,25 +434,38 @@ func PingReq() {
 						if Strategy == "NORMAL" {
 							ChangeStrategy()
 						}
-						for _, V := range ReadyAddressTable {
-							NewNode := map[string]string{
-								"newIp":    V,
+						var NewNode map[string]string
+						NewNode = make(map[string]string)
+						if len(ReadyAddressTable) == 0 {
+							NewNode = map[string]string{
 								"zombieIp": NodeAddress,
 							}
-							Data, err := json.Marshal(NewNode)
-							_, err = http.Post("http://"+GetMyIP()+":7000/modifyHost", "application/json", bytes.NewBuffer(Data))
-							if err != nil {
-								logFile := OpenLogFile("Error")
-								WriteLog(logFile, "logging,error log,system-name,MSP,errmsg,"+"Connection error")
-								defer logFile.Close()
-							}
-							break
+							fmt.Println("Only Zombie no Ready", NodeAddress)
 						}
+						if len(ReadyAddressTable) > 0 {
+							for _, V := range ReadyAddressTable {
+								NewNode = map[string]string{
+									"newIp":    V,
+									"zombieIp": NodeAddress,
+								}
+								break
+							}
+							fmt.Println("Send Zombie And Ready", NodeAddress)
+						}
+						Data, err := json.Marshal(NewNode)
+						res, err := http.Post("http://"+GetMyIP()+":7000/modifyHost", "application/json", bytes.NewBuffer(Data))
+						if err != nil {
+							logFile := OpenLogFile("Error")
+							WriteLog(logFile, "logging,error log,system-name,MSP,errmsg,"+"Connection error")
+							defer logFile.Close()
+						}
+						var ResFromGateway string
+						json.NewDecoder(res.Body).Decode(&ResFromGateway)
+						fmt.Println("ResFromGateway", ResFromGateway)
 						delete(CurrentAddressTable, Node)
 						ZombieAddressTable[Node] = NodeAddress
 						WriteHosts()
 					}
-
 				}
 			}
 		}

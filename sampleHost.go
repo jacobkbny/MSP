@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"time"
 )
@@ -49,11 +50,29 @@ func jsonTest() {
 	}
 	byteData, _ := json.Marshal(hostinfo)
 	// fmt.Println(string(byteData))
+	date := time.Now().Format("2006-01-02")
 	logFolderPath := "./log"
-	logFile, err := os.OpenFile(logFolderPath+"/"+time.Now().Format("2006-01-02")+"-Hosts.txt", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	logFilePath := fmt.Sprintf("%s/%s-%s.txt", logFolderPath, date, "Hosts")
+	if _, err := os.Stat(logFolderPath); os.IsNotExist(err) {
+		os.MkdirAll(logFolderPath, 0666)
+	}
+	var isExistFile bool = true
+	if _, err := os.Stat(logFilePath); err != nil {
+		os.Create(logFilePath)
+		isExistFile = false
+	}
+	logFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
-		fmt.Println(err)
+		log.Println("open error")
+		panic(err)
+	}
+	if isExistFile {
+		deleteLine(logFilePath, "]")
+		WriteLog(logFile, ",")
+	} else {
+		WriteLog(logFile, "[")
 	}
 	logFile.Write(byteData)
-	defer logFile.Close()
+	WriteLog(logFile, "\n]")
+	logFile.Close()
 }

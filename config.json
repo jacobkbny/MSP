@@ -10,9 +10,9 @@
     "gateWay" : "192.168.100.1000",
 
     "user" : {
-        "userName" : "pkb",
-        "passWord" : "pkb0322",
-        "dataBaseName" : "Cabb"
+        "userName" : "",
+        "passWord" : "",
+        "dataBaseName" : ""
     },
     "pBFT" : "192.168.11.11:1800"
 
